@@ -1,0 +1,42 @@
+{{- if .Values.mcpServer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-mcp-server
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: mcp-server
+    spec:
+      containers:
+        - name: mcp-server
+          image: "{{ .Values.mcpServer.image.repository }}:{{ .Values.mcpServer.image.tag }}"
+          imagePullPolicy: {{ .Values.mcpServer.image.pullPolicy | default "IfNotPresent" }}
+          env:
+            - name: FT_API_URL
+              value: {{ printf "http://%s-freqtrade:%d" (include "freqtrade-ai.fullname" .) (.Values.freqtrade.apiPort | int) | quote }}
+            - name: MCP_ALLOW_WRITE
+              value: {{ ternary "yes" "no" .Values.mcpServer.allowWrite | quote }}
+            - name: FT_API_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.apiUsername }}
+            - name: FT_API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.apiPassword }}
+{{- end }}

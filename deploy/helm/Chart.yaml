@@ -1,0 +1,14 @@
+apiVersion: v2
+name: freqtrade-ai
+description: Freqtrade AI trading stack (Freqtrade + Inference Gateway + MCP server)
+type: application
+version: 0.1.0
+appVersion: "stable"
+kubeVersion: ">= 1.26.0-0"
+keywords:
+  - freqtrade
+  - trading
+  - ml
+  - freqai
+maintainers:
+  - name: freqtrade-ai

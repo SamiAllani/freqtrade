@@ -1,0 +1,12 @@
+# Pre-provisioned Prometheus datasource (Task 9). Grafana resolves
+# ${DS_PROMETHEUS} in dashboards/trading.json and dashboards/inference.json
+# to this datasource.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

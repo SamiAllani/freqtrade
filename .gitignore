@@ -1,0 +1,39 @@
+# Secrets / local env
+.env
+*.env
+!.env.example
+**/.env.example
+!**/.env.example
+
+# Generated artifacts (never commit)
+*.generated.*
+freqtrade/user_data/config.json
+deploy/compose/.env.generated
+deploy/helm/values.generated.yaml
+
+# Freqtrade runtime data
+freqtrade/user_data/
+!freqtrade/user_data/strategies/
+!freqtrade/user_data/freqaimodels/
+user_data/
+*.sqlite
+*.sqlite-journal
+tradesv3*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.uv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

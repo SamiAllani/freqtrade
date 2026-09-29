@@ -1,0 +1,79 @@
+{{- if .Values.inference.enabled }}
+{{- $limits := .Values.inference.resources.limits }}
+{{- if .Values.inference.gpu.enabled }}
+{{- $limits = merge (dict "nvidia.com/gpu" .Values.inference.gpu.count) (deepCopy $limits) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-inference
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: inference
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: inference
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.inference.gpu.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.inference.gpu.runtimeClassName }}
+      runtimeClassName: {{ .Values.inference.gpu.runtimeClassName | quote }}
+      {{- end }}
+      {{- with .Values.inference.gpu.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: inference
+          image: "{{ .Values.inference.image.repository }}:{{ .Values.inference.image.tag }}"
+          imagePullPolicy: {{ .Values.inference.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.inference.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.inference.port | quote }}
+            - name: MODELS_DIR
+              value: {{ .Values.inference.modelsVolume.mountPath | default "/models" | quote }}
+          resources:
+            requests: {{ .Values.inference.resources.requests | toJson }}
+            limits: {{ $limits | toJson }}
+          volumeMounts:
+            {{- if .Values.inference.modelsVolume.enabled }}
+            - name: models
+              mountPath: {{ .Values.inference.modelsVolume.mountPath | default "/models" }}
+              readOnly: true
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      {{- if .Values.inference.modelsVolume.enabled }}
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: {{ required "inference.modelsVolume.claimName is required when modelsVolume.enabled=true" .Values.inference.modelsVolume.claimName }}
+      {{- end }}
+{{- end }}

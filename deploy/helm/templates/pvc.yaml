@@ -1,0 +1,18 @@
+{{- if .Values.freqtrade.persistence.enabled }}
+{{/* user_data PVC: trades DB + FreqAI models (user_data/models/<identifier>). */}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-user-data
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.freqtrade.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.freqtrade.persistence.size }}
+  {{- if .Values.freqtrade.persistence.storageClass }}
+  storageClassName: {{ .Values.freqtrade.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+# Prometheus scrape config (Task 9).
+# Sources: inference gateway /metrics + freqtrade exporter (which polls the
+# bot REST API /api/v1) + prometheus itself.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: inference
+    static_configs:
+      - targets: ["inference:8000"]
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  - job_name: freqtrade-exporter
+    static_configs:
+      - targets: ["freqtrade-exporter:9108"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

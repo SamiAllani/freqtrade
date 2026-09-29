@@ -1,0 +1,71 @@
+[project]
+name = "freqtrade-ai-app"
+version = "0.1.0"
+description = "Freqtrade AI trading app (Binance, FreqAI, inference gateway, MCP)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.4.0",
+  "mypy>=1.10",
+  "pre-commit>=3.0",
+]
+ftctl = [
+  "typer>=0.12",
+]
+gateway = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "httpx>=0.27",
+  "prometheus-client>=0.20",
+]
+gpu = [
+  "torch>=2.0",
+]
+mcp = [
+  # mcp 2.x renamed FastMCP -> MCPServer; the bot server (Task 7) uses the 1.x API.
+  "mcp>=1.9,<2",
+  "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["common", "ftctl", "inference/app", "mcp_server"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# typer.Option()/typer.Argument() in defaults is the documented Typer pattern.
+"ftctl/cli.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+# skip following third-party imports: newer numpy stubs use 3.12+ syntax
+# and break `mypy --python-version 3.11` runs on 3.13 hosts otherwise.
+follow_imports = "skip"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["e2e: end-to-end tests that boot the docker stack (opt-in via FT_E2E_DOCKER=1)"]

@@ -1,0 +1,169 @@
+# Local CPU stack (Task 4). Dry-run by default; all runtime values come from
+# the ftctl-rendered env file `deploy/compose/.env.generated`:
+#
+#   cp config/.env.example config/.env   # fill in, never commit
+#   python -m ftctl.cli render freqtrade --out freqtrade/user_data/config.json
+#   python -m ftctl.cli render compose  --out deploy/compose/.env.generated
+#   docker compose -f deploy/compose/docker-compose.yml up --build
+#
+# Every `${VAR:-default}` below keeps `docker compose config` working on a
+# fresh clone (before the first render). All host ports bind to 127.0.0.1.
+
+services:
+  freqtrade:
+    build:
+      context: ../..
+      dockerfile: freqtrade/Dockerfile
+      args:
+        # Rendered by ftctl as FREQTRADE_TAG (stable | stable_freqai |
+        # stable_freqaitorch). NOTE: build args interpolate from the shell /
+        # project .env, *not* from env_file, so export the rendered value
+        # for image builds, e.g.:
+        #   set -a; source deploy/compose/.env.generated; set +a
+        FREQTRADE_TAG: ${FREQTRADE_TAG:-stable}
+    image: freqtrade-ai-freqtrade:local
+    # FREQTRADE_ARGS is rendered by ftctl as "--strategy <Name>
+    # [--freqaimodel <Model>]" and expanded here by the container shell, so
+    # --strategy/--freqaimodel switch without editing this file. The DB lives
+    # under /freqtrade/user_data so it persists on the named volume.
+    command: >
+      sh -c 'freqtrade trade
+      --config /freqtrade/user_data/config.json
+      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+      $${FREQTRADE_ARGS:---strategy AiSignalStrategy}'
+    env_file:
+      - path: .env.generated
+        required: false
+    environment:
+      TZ: ${TZ:-UTC}
+      INFERENCE_URL: ${INFERENCE_URL:-http://inference:8000}
+    ports:
+      - "127.0.0.1:${FT_API_PORT:-8080}:8080"
+    volumes:
+      # Rendered, git-ignored Freqtrade config (read-only).
+      - ../../freqtrade/user_data/config.json:/freqtrade/user_data/config.json:ro
+      - ../../freqtrade/user_data/strategies:/freqtrade/user_data/strategies:ro
+      - ../../freqtrade/user_data/freqaimodels:/freqtrade/user_data/freqaimodels:ro
+      # Named volume persists everything else under user_data: trained FreqAI
+      # models (user_data/models/<identifier>) and the trades DB. The ro bind
+      # mounts above shadow only their own subpaths.
+      - freqtrade-user-data:/freqtrade/user_data
+    depends_on:
+      inference:
+        condition: service_healthy
+    healthcheck:
+      # Any HTTP answer (even 401 from the auth-guarded API) means the bot
+      # loop is up; only a refused/timeout connection fails the check.
+      test:
+        [
+          "CMD-SHELL",
+          "python3 -c \"import urllib.request,urllib.error;try:urllib.request.urlopen('http://127.0.0.1:8080/api/v1/ping',timeout=5)\nexcept urllib.error.HTTPError:pass\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  inference:
+    build:
+      context: ../..
+      dockerfile: inference/Dockerfile
+    image: freqtrade-ai-inference:local
+    env_file:
+      - path: .env.generated
+        required: false
+    environment:
+      MODELS_DIR: /models
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:${INFERENCE_PORT:-8000}:8000"
+    volumes:
+      - ../../inference/models:/models:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  mcp-server:
+    # Optional: only starts with `--profile mcp`.
+    # (mcp_server/Dockerfile lands with Task 7; until then keep the profile off.)
+    build:
+      context: ../..
+      dockerfile: mcp_server/Dockerfile
+    image: freqtrade-ai-mcp-server:local
+    profiles:
+      - mcp
+    env_file:
+      - path: .env.generated
+        required: false
+    environment:
+      FT_API_URL: ${FT_API_URL:-http://freqtrade:8080}
+      MCP_ALLOW_WRITE: ${MCP_ALLOW_WRITE:-no}
+    depends_on:
+      - freqtrade
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "127.0.0.1:${PROM_PORT:-9090}:9090"
+    volumes:
+      # Task 9 scrape config: inference /metrics + freqtrade-exporter.
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    restart: unless-stopped
+
+  freqtrade-exporter:
+    # Task 9: polls the bot REST API (/api/v1) and exposes /metrics for
+    # Prometheus. No host port: scraped in-network as freqtrade-exporter:9108.
+    build:
+      context: ../..
+      dockerfile: monitoring/Dockerfile
+    image: freqtrade-ai-freqtrade-exporter:local
+    env_file:
+      - path: .env.generated
+        required: false
+    environment:
+      FT_API_URL: ${FT_API_URL:-http://freqtrade:8080}
+      EXPORTER_PORT: "9108"
+      POLL_INTERVAL_S: ${EXPORTER_POLL_INTERVAL_S:-15}
+    depends_on:
+      - freqtrade
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # Pre-provisioned dashboards (Task 9): canonical JSON lives in
+      # <repo>/dashboards/*.json and is mounted where the dashboard
+      # provider expects it (see grafana/provisioning/dashboards/*.yml).
+      - ../../dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  # Freqtrade user_data: FreqAI models + trades DB survive restarts/recreates.
+  freqtrade-user-data:
+  prometheus-data:
+  grafana-data:

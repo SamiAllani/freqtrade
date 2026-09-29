@@ -1,0 +1,44 @@
+mode: dry_run
+exchange:
+  name: binance
+  pairs: ["BTC/USDT", "ETH/USDT"]
+  stake_currency: USDT
+  stake_amount: 50
+  max_stake: 100
+strategy:
+  signal_source: gateway
+  name: AiSignalStrategy
+  timeframe: 5m
+  entry_signal_min: 0.4
+  entry_confidence_min: 0.6
+  exit_signal_max: -0.2
+freqai:
+  enabled: false
+  identifier: ft-freqai-v1
+  model: LightGBMRegressor
+  train_period_days: 30
+  backtest_period_days: 7
+  live_retrain_hours: 1
+  device: auto
+  feature_parameters:
+    include_timeframes: ["5m", "1h"]
+    include_corr_pairlist: ["ETH/USDT"]
+    label_period_candles: 24
+  data_split_parameters: {test_size: 0.33, shuffle: false}
+  model_training_parameters: {}
+inference:
+  url: http://inference:8000
+  default_model: local-gru
+  models:
+    local-gru: {backend: local, device: auto}
+    remote-llm: {backend: mcp, server: llm-tools, tool: predict}
+mcp:
+  servers:
+    llm-tools:
+      transport: stdio
+      command: ["python", "-m", "some_mcp_server"]
+secrets:
+  binance_key: ${BINANCE_API_KEY}
+  binance_secret: ${BINANCE_API_SECRET}
+  ft_api_username: ${FT_API_USERNAME}
+  ft_api_password: ${FT_API_PASSWORD}

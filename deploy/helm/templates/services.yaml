@@ -1,0 +1,40 @@
+{{/* ClusterIP services only — no Ingress by default. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-freqtrade
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: freqtrade
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: api
+      port: {{ .Values.freqtrade.apiPort }}
+      targetPort: api
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: freqtrade
+---
+{{- if .Values.inference.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-inference
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: inference
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.inference.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: inference
+{{- end }}

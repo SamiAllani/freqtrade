@@ -1,0 +1,166 @@
+# Default values for the freqtrade-ai chart.
+#
+# Runtime behaviour (mode, exchange, strategy, freqai, inference.url) is
+# driven by ftctl:
+#
+#   python -m ftctl.cli render helm --out deploy/helm/values.generated.yaml
+#   helm install freqtrade-ai ./deploy/helm \
+#     -f deploy/helm/values.generated.yaml
+#
+# Keys emitted by `ftctl render helm` (mode, dryRun, exchange, strategy,
+# freqtrade.tag/strategy/freqaimodel, freqai, inference.url/defaultModel,
+# apiServer, existingSecret) merge over the defaults below. Never put secret
+# *values* in either file — credentials always come from `existingSecret`.
+
+mode: dry_run
+dryRun: true
+
+exchange:
+  name: binance
+  pairs:
+    - BTC/USDT
+    - ETH/USDT
+  stakeCurrency: USDT
+  stakeAmount: 50
+  maxStake: 100
+
+strategy:
+  name: AiSignalStrategy
+  signalSource: gateway # gateway | freqai | hybrid
+  timeframe: 5m
+  entrySignalMin: 0.4
+  entryConfidenceMin: 0.6
+  exitSignalMax: -0.2
+  # Rendered by ftctl as ["--strategy", "<Name>", ("--freqaimodel", "<Model>")].
+  args:
+    - --strategy
+    - AiSignalStrategy
+
+freqai:
+  enabled: false
+  identifier: ft-freqai-v1
+  model: LightGBMRegressor
+  trainPeriodDays: 30
+  backtestPeriodDays: 7
+  liveRetrainHours: 1
+  featureParameters:
+    includeTimeframes:
+      - 5m
+      - 1h
+    includeCorrPairlist:
+      - ETH/USDT
+    labelPeriodCandles: 24
+  dataSplitParameters:
+    testSize: 0.33
+    shuffle: false
+  modelTrainingParameters: {}
+
+freqtrade:
+  image:
+    repository: freqtradeorg/freqtrade
+    # Variant selected by ftctl (`freqtrade.tag`): stable | stable_freqai |
+    # stable_freqaitorch. Null here keeps the stock `stable` tag.
+    tag: null
+  # Must stay 1: two traders must never run at once (enforced, see template).
+  replicaCount: 1
+  apiPort: 8080
+  # Mirrors the inference GPU toggle for PyTorch FreqAI models. When true the
+  # freqtrade pod requests one NVIDIA GPU (needs a CUDA-capable FreqAI image,
+  # e.g. freqtrade/Dockerfile.freqai on a CUDA base — the stock FreqAI images
+  # may not ship CUDA-enabled PyTorch).
+  gpu:
+    enabled: false
+    nodeSelector: {}
+    tolerations: []
+    runtimeClassName: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  # Higher requests applied when freqai.enabled=true (background retraining
+  # thread). Empty here means "use .resources"; set to override.
+  freqaiResources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+  persistence:
+    enabled: true
+    # Holds user_data (trades DB + user_data/models/<identifier>).
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce
+
+inference:
+  enabled: true
+  image:
+    repository: freqtrade-ai-inference
+    tag: latest
+  port: 8000
+  url: http://freqtrade-ai-inference:8000
+  defaultModel: local-gru
+  gpu:
+    enabled: false
+    # Number of GPUs requested when enabled.
+    count: 1
+    nodeSelector: {}
+    tolerations: []
+    # Set to "nvidia" on clusters that need an explicit runtime class.
+    runtimeClassName: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  modelsVolume:
+    # Models baked into the image under /models by default. Point at an
+    # existing PVC to serve externally-managed model files instead.
+    enabled: false
+    claimName: ""
+    mountPath: /models
+
+mcpServer:
+  # Optional (Compose parity: `--profile mcp`). Off by default.
+  enabled: false
+  image:
+    repository: freqtrade-ai-mcp-server
+    tag: latest
+  allowWrite: false # MCP_ALLOW_WRITE=yes registers pause_trading/force_exit
+
+apiServer:
+  enabled: true
+
+# Reference only: the chart mounts these keys from a pre-created K8s Secret.
+# Never put secret values in values files.
+existingSecret:
+  name: freqtrade-secrets
+  keys:
+    binanceKey: BINANCE_API_KEY
+    binanceSecret: BINANCE_API_SECRET
+    apiUsername: FT_API_USERNAME
+    apiPassword: FT_API_PASSWORD
+
+# Optional in-chart Secret (dev/kind only). Off by default: create the
+# `existingSecret` out of band instead (see templates/secret.yaml).
+secret:
+  create: false
+  # Plain-text values ONLY for local dev; never commit real credentials.
+  data:
+    BINANCE_API_KEY: ""
+    BINANCE_API_SECRET: ""
+    FT_API_USERNAME: ""
+    FT_API_PASSWORD: ""
+
+service:
+  type: ClusterIP # Freqtrade API stays ClusterIP-only; no Ingress by default.
+
+serviceMonitor:
+  enabled: false
+  interval: 30s

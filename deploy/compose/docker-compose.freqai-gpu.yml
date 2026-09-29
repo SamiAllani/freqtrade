@@ -1,0 +1,26 @@
+# GPU override for the freqtrade service (Task 4). Only needed for PyTorch
+# FreqAI models (`freqai.model` containing "torch"/"pytorch", i.e.
+# FREQTRADE_TAG=stable_freqaitorch with freqai.device=cuda). ClassicML FreqAI
+# models (LightGBM/XGBoost) and gateway mode do NOT need this file.
+#
+# NOTE: the stock FreqAI images may not ship CUDA-enabled PyTorch; if
+# `torch.cuda.is_available()` is false inside the container, use the custom
+# CUDA-base image from Task 11 (freqtrade/Dockerfile.freqai) instead of the
+# stock tag, e.g. by pointing the freqtrade build at that Dockerfile.
+#
+# Usage (from the repo root, NVIDIA host with the Container Toolkit):
+#   docker compose -f deploy/compose/docker-compose.yml \
+#                  -f deploy/compose/docker-compose.gpu.yml \
+#                  -f deploy/compose/docker-compose.freqai-gpu.yml up --build
+
+services:
+  freqtrade:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all

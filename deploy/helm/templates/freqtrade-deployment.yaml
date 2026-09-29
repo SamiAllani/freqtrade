@@ -1,0 +1,125 @@
+{{/* Freqtrade trader: exactly 1 replica, Recreate strategy. */}}
+{{- if ne (int .Values.freqtrade.replicaCount) 1 }}
+{{- fail "freqtrade.replicaCount must be 1: two traders must never run at once" }}
+{{- end }}
+{{- if not .Values.existingSecret.name }}
+{{- fail "existingSecret.name is required: create the credentials Secret before installing" }}
+{{- end }}
+{{- $baseResources := .Values.freqtrade.resources }}
+{{- if .Values.freqai.enabled }}
+{{- $baseResources = .Values.freqtrade.freqaiResources }}
+{{- end }}
+{{- $limits := $baseResources.limits }}
+{{- if .Values.freqtrade.gpu.enabled }}
+{{- $limits = merge (dict "nvidia.com/gpu" 1) (deepCopy $limits) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-freqtrade
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+    app.kubernetes.io/component: freqtrade
+spec:
+  # Recreate: never run two traders against the same exchange account/DB.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: freqtrade
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "freqtrade-ai.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: freqtrade
+    spec:
+      {{- with .Values.freqtrade.gpu.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.freqtrade.gpu.runtimeClassName }}
+      runtimeClassName: {{ .Values.freqtrade.gpu.runtimeClassName | quote }}
+      {{- end }}
+      {{- with .Values.freqtrade.gpu.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: freqtrade
+          image: "{{ .Values.freqtrade.image.repository }}:{{ include "freqtrade-ai.freqtradeTag" . }}"
+          imagePullPolicy: {{ .Values.freqtrade.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - trade
+            - --config
+            - /freqtrade/user_data/config.json
+            - --db-url
+            - sqlite:////freqtrade/user_data/tradesv3.sqlite
+            {{- range .Values.strategy.args }}
+            - {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.freqtrade.apiPort }}
+          env:
+            - name: INFERENCE_URL
+              value: {{ .Values.inference.url | quote }}
+            - name: EXCHANGE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.binanceKey }}
+            - name: EXCHANGE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.binanceSecret }}
+            - name: API_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.apiUsername }}
+            - name: API_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret.name }}
+                  key: {{ .Values.existingSecret.keys.apiPassword }}
+          resources:
+            requests: {{ $baseResources.requests | toJson }}
+            limits: {{ $limits | toJson }}
+          volumeMounts:
+            - name: config
+              mountPath: /freqtrade/user_data/config.json
+              subPath: config.json
+              readOnly: true
+            - name: user-data
+              # user_data incl. user_data/models/<identifier> for FreqAI.
+              mountPath: /freqtrade/user_data
+              subPath: user_data
+          livenessProbe:
+            httpGet:
+              path: /api/v1/ping
+              port: api
+            initialDelaySeconds: 90
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/ping
+              port: api
+            initialDelaySeconds: 60
+            periodSeconds: 15
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "freqtrade-ai.fullname" . }}-config
+        {{- if .Values.freqtrade.persistence.enabled }}
+        - name: user-data
+          persistentVolumeClaim:
+            claimName: {{ include "freqtrade-ai.fullname" . }}-user-data
+        {{- else }}
+        - name: user-data
+          emptyDir: {}
+        {{- end }}

@@ -1,0 +1,15 @@
+# Dashboard provider (Task 9). The canonical dashboard JSON lives in
+# <repo>/dashboards/{trading,inference}.json and is mounted read-only at
+# /var/lib/grafana/dashboards by docker-compose.yml, so Grafana starts with
+# both dashboards pre-provisioned.
+apiVersion: 1
+
+providers:
+  - name: trading
+    folder: Trading
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards

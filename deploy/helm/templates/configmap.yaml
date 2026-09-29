@@ -1,0 +1,60 @@
+{{/* Freqtrade config.json rendered from values (ftctl-compatible keys). */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "freqtrade-ai.fullname" . }}-config
+  labels:
+    {{- include "freqtrade-ai.labels" . | nindent 4 }}
+data:
+  config.json: |-
+    {
+      "max_open_trades": 3,
+      "stake_currency": {{ .Values.exchange.stakeCurrency | quote }},
+      "stake_amount": {{ .Values.exchange.stakeAmount }},
+      "dry_run": {{ .Values.dryRun }},
+      "dry_run_wallet": 1000,
+      "cancel_open_orders_on_exit": true,
+      "timeframe": {{ .Values.strategy.timeframe | quote }},
+      "strategy": {{ .Values.strategy.name | quote }},
+      "strategy_params": {
+        "entry_signal_min": {{ .Values.strategy.entrySignalMin }},
+        "entry_confidence_min": {{ .Values.strategy.entryConfidenceMin }},
+        "exit_signal_max": {{ .Values.strategy.exitSignalMax }}
+      },
+      "exchange": {
+        "name": {{ .Values.exchange.name | quote }},
+        "enabled": true,
+        "key": "",
+        "secret": "",
+        "pair_whitelist": {{ .Values.exchange.pairs | toJson }},
+        "pair_blacklist": []
+      },
+      "pairlists": [{"method": "StaticPairList"}],
+      "api_server": {
+        "enabled": {{ .Values.apiServer.enabled }},
+        "listen_ip_address": "0.0.0.0",
+        "port": {{ .Values.freqtrade.apiPort }},
+        "username": "",
+        "password": ""
+      },
+      "bot_name": "freqtrade",
+      "initial_state": "running",
+      "db_url": "sqlite:////freqtrade/user_data/tradesv3.sqlite"{{ if .Values.freqai.enabled }},
+      "freqai": {
+        "enabled": true,
+        "identifier": {{ .Values.freqai.identifier | quote }},
+        "train_period_days": {{ .Values.freqai.trainPeriodDays }},
+        "backtest_period_days": {{ .Values.freqai.backtestPeriodDays }},
+        "live_retrain_hours": {{ .Values.freqai.liveRetrainHours }},
+        "feature_parameters": {
+          "include_timeframes": {{ .Values.freqai.featureParameters.includeTimeframes | toJson }},
+          "include_corr_pairlist": {{ .Values.freqai.featureParameters.includeCorrPairlist | toJson }},
+          "label_period_candles": {{ .Values.freqai.featureParameters.labelPeriodCandles }}
+        },
+        "data_split_parameters": {
+          "test_size": {{ .Values.freqai.dataSplitParameters.testSize }},
+          "shuffle": {{ .Values.freqai.dataSplitParameters.shuffle }}
+        },
+        "model_training_parameters": {{ .Values.freqai.modelTrainingParameters | toJson }}
+      }{{ end }}
+    }

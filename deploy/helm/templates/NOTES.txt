@@ -1,0 +1,39 @@
+Freqtrade AI stack deployed as {{ include "freqtrade-ai.fullname" . }}.
+
+Mode: {{ .Values.mode }} (dry_run={{ .Values.dryRun }})
+Strategy: {{ .Values.strategy.name }} (signalSource={{ .Values.strategy.signalSource }})
+Freqtrade image tag: {{ include "freqtrade-ai.freqtradeTag" . }}{{ if .Values.freqai.enabled }} (FreqAI {{ .Values.freqai.identifier }}/{{ .Values.freqai.model }}){{ end }}
+
+1. Render runtime values with ftctl and upgrade:
+     python -m ftctl.cli render helm --out deploy/helm/values.generated.yaml
+     helm upgrade --install {{ .Release.Name }} ./deploy/helm \
+       -f deploy/helm/values.generated.yaml
+
+2. Credentials come from the pre-created Secret "{{ .Values.existingSecret.name }}".
+   Create it before installing, e.g.:
+     kubectl create secret generic {{ .Values.existingSecret.name }} \
+       --from-literal={{ .Values.existingSecret.keys.binanceKey }}="$BINANCE_API_KEY" \
+       --from-literal={{ .Values.existingSecret.keys.binanceSecret }}="$BINANCE_API_SECRET" \
+       --from-literal={{ .Values.existingSecret.keys.apiUsername }}="$FT_API_USERNAME" \
+       --from-literal={{ .Values.existingSecret.keys.apiPassword }}="$FT_API_PASSWORD"
+   Without it the freqtrade pod fails with a clear "secret not found" event.
+
+3. GPU scheduling (inference):
+   {{- if .Values.inference.gpu.enabled }}
+   GPU requests are enabled (nvidia.com/gpu={{ .Values.inference.gpu.count }}).
+   {{- else }}
+   CPU inference. Enable GPUs with:
+     --set inference.gpu.enabled=true [--set inference.gpu.runtimeClassName=nvidia]
+   {{- end }}
+   The cluster needs the NVIDIA device plugin (not installed by this chart).
+   Without a GPU node the pod stays Pending — check `kubectl describe pod`.
+
+4. Freqtrade runs a single replica with strategy Recreate: two traders must
+   never run at once. FreqUI/API is ClusterIP-only (no Ingress by default);
+   use `kubectl port-forward svc/{{ include "freqtrade-ai.fullname" . }}-freqtrade {{ .Values.freqtrade.apiPort }}:{{ .Values.freqtrade.apiPort }}`.
+
+{{- if .Values.secret.create }}
+
+WARNING: secret.create=true installs a dev-only Secret from plain-text values.
+Never use it with real credentials.
+{{- end }}
