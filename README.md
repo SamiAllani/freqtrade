@@ -27,7 +27,7 @@ Kubernetes, and **Prometheus + Grafana** observability.
 ```
               ┌──────────────────────────────┐
 app.yaml+.env │  ftctl (config renderer)     │
-──────────────►│  → freqtrade config.json     │
+─────────────►│  → freqtrade config.json     │
               │  → compose .env / overrides  │
               │  → Helm values.yaml          │
               └──────────────┬───────────────┘
