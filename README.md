@@ -161,6 +161,178 @@ carry it in `FREQTRADE_ARGS` / `strategy.args`); image variant comes from
 `freqtrade_tag()` (`stable` → `stable_freqai` → `stable_freqaitorch` for torch models);
 Helm output uses `existingSecret` references, never secret values.
 
+### Config reference (all fields)
+
+Single source of truth: `common/contracts.py` (`AppConfig`). All defaults below
+come from there; `config/app.yaml.example` shows a working combination.
+
+#### `mode`
+
+| Value | Meaning |
+|-------|---------|
+| `dry_run` (default) | Paper trading. Secrets may be missing — unresolved `${VAR}` inside `secrets:` falls back to `DRY_RUN_PLACEHOLDER` so a fresh clone renders. |
+| `live` | Real trading. Requires `FT_ALLOW_LIVE=yes` in the environment **and** real (non-placeholder) secrets, else `ftctl validate`/`render` exits non-zero. Also requires `stake_amount <= max_stake`. |
+
+#### `exchange:`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `name` | `binance` | Exchange id passed to Freqtrade `exchange.name`. |
+| `pairs` | `[]` | Pair whitelist, e.g. `["BTC/USDT", "ETH/USDT"]`. Rendered to Freqtrade `pair_whitelist` (+ `StaticPairList`), Compose `FT_PAIRS`, Helm `exchange.pairs`. |
+| `stake_currency` | `USDT` | Stake currency (`stake_currency`). |
+| `stake_amount` | `50.0` | Per-trade stake. Guard: must be `<= max_stake` in **every** mode. |
+| `max_stake` | `100.0` | Safety ceiling for `stake_amount`. |
+
+#### `strategy:`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `signal_source` | `gateway` | `gateway` → `AiSignalStrategy` (needs inference gateway); `freqai` → `FreqAiStrategy` (in-process, needs `freqai.enabled: true`); `hybrid` → both (needs gateway + FreqAI). `freqai`/`hybrid` without `freqai.enabled: true` is a validation error. Rendered to Compose `FT_SIGNAL_SOURCE`, Helm `strategy.signalSource`. |
+| `name` | `AiSignalStrategy` | Freqtrade `--strategy` value, also `strategy` in `config.json`. |
+| `timeframe` | `5m` | Candle timeframe (`timeframe` in `config.json`, `FT_TIMEFRAME`). |
+| `entry_signal_min` | `0.4` | Enter when gateway `signal > entry_signal_min` **and** `confidence > entry_confidence_min`. Lands in `config.json` → `strategy_params`. |
+| `entry_confidence_min` | `0.6` | See above. |
+| `exit_signal_max` | `-0.2` | Exit when gateway `signal < exit_signal_max`. Fallback when the gateway is unreachable: enter on RSI < 30, exit on RSI > 70. |
+
+#### `freqai:`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `false` | Toggles the Freqtrade `freqai` block, `--freqaimodel` arg, `stable_freqai`/`stable_freqaitorch` image variant, and (Helm) higher CPU/memory requests. |
+| `identifier` | `ft-freqai-v1` | Model version tag. Trained models persist in `user_data/models/<identifier>` — **bump it whenever the feature set changes**. |
+| `model` | `LightGBMRegressor` | FreqAI model class → `--freqaimodel` CLI flag (never in `config.json`). A name containing `torch`/`pytorch` selects the `stable_freqaitorch` image. |
+| `train_period_days` | `30` | FreqAI training window. |
+| `backtest_period_days` | `7` | FreqAI backtest window. |
+| `live_retrain_hours` | `1` | Live retraining interval. |
+| `device` | `auto` | `auto` (CUDA when available, else CPU) \| `cuda` \| `cpu`. |
+| `feature_parameters.include_timeframes` | `["5m", "1h"]` | Informative timeframes for features. |
+| `feature_parameters.include_corr_pairlist` | `[]` | Extra pairs for correlation features, e.g. `["ETH/USDT"]`. |
+| `feature_parameters.label_period_candles` | `24` | Label horizon in candles. |
+| `data_split_parameters.test_size` | `0.33` | Test split fraction. |
+| `data_split_parameters.shuffle` | `false` | Never shuffle time-series splits. |
+| `model_training_parameters` | `{}` | Free-form dict forwarded to the FreqAI model. |
+
+#### `inference:`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `url` | `http://inference:8000` | Gateway base URL the strategy calls (`POST <url>/v1/predict`). In Compose `INFERENCE_URL` defaults to the in-network `http://inference:8000`. |
+| `default_model` | `local-gru` | Model used when the strategy/request omits one. If it is not listed in `models:`, the gateway auto-registers it as a `local` baseline. |
+| `models.<name>.backend` | — (required per entry) | `local` → in-process PyTorch GRU (needs model file in `$MODELS_DIR`); `mcp` → external model via MCP tool. |
+| `models.<name>.device` | `auto` | Only for `local`: `auto` \| `cuda` \| `cpu`. |
+| `models.<name>.server` | — | Only for `mcp`: key into `mcp.servers`, e.g. `llm-tools`. |
+| `models.<name>.tool` | — | Only for `mcp`: tool name to call, e.g. `predict`. |
+
+Example:
+
+```yaml
+inference:
+  url: http://inference:8000
+  default_model: local-gru
+  models:
+    local-gru: {backend: local, device: auto}
+    remote-llm: {backend: mcp, server: llm-tools, tool: predict}
+```
+
+#### `mcp.servers.<name>:`
+
+| Key | Description |
+|-----|-------------|
+| `transport` | `stdio` (spawn via `command`) or `http` (connect to `url`). |
+| `command` | `stdio` only: argv to launch the server, e.g. `["python", "-m", "some_mcp_server"]`. |
+| `url` | `http` only: server URL. |
+
+#### `secrets:`
+
+Always `${ENV_VAR}` references — never literals. `ftctl show` prints
+`***REDACTED***` for every field, and rendered Compose/Helm artifacts never
+leak values (Helm emits `existingSecret` key names only).
+
+| Key | Typical reference | Used as |
+|-----|-------------------|---------|
+| `binance_key` | `${BINANCE_API_KEY}` | Freqtrade `exchange.key` |
+| `binance_secret` | `${BINANCE_API_SECRET}` | Freqtrade `exchange.secret` |
+| `ft_api_username` | `${FT_API_USERNAME}` | Freqtrade `api_server.username` (also exporter/MCP client auth) |
+| `ft_api_password` | `${FT_API_PASSWORD}` | Freqtrade `api_server.password` |
+
+#### `.env` files (3 distinct roles — don't mix them up)
+
+| File | Committed? | Who reads it | Purpose |
+|------|------------|--------------|---------|
+| `config/.env` | No (git-ignored) | `ftctl` only | **Input**: secret values for `${VAR}` interpolation in `app.yaml`. Create with `cp config/.env.example config/.env`, then fill in real secrets. Process env wins over this file. |
+| `deploy/compose/.env.generated` | No (`*.generated.*` git-ignored) | Compose `env_file` → containers | **Output** of `ftctl render compose`. Contains resolved secrets + `FT_*`/`FREQTRADE_*`/`INFERENCE_*` vars. Never edit by hand, never commit. |
+| `deploy/compose/.env` | No (git-ignored) | `docker compose` interpolation only | **Optional local overrides** (ports, `MCP_ALLOW_WRITE`, `TZ`, Grafana login). Copy from `deploy/compose/.env.example` only if you want non-defaults; a fresh clone works without it. Does **not** reach containers as env — `env_file` (the generated file) does. Build args (`FREQTRADE_TAG`) also interpolate from the shell, not from `env_file`. |
+
+Flow: `config/.env` (+ `app.yaml`) → `ftctl render compose` → `.env.generated` → containers.
+
+#### `config/.env` (+ process environment)
+
+Copy `config/.env.example` → `config/.env` (git-ignored, never commit). Any
+`${VAR}` may also come from the process environment, which wins over the file.
+Full example (`config/.env.example`):
+
+```bash
+BINANCE_API_KEY=test_key_placeholder
+BINANCE_API_SECRET=test_secret_placeholder
+FT_API_USERNAME=freqtrader
+FT_API_PASSWORD=changeme
+FT_ALLOW_LIVE=no
+```
+
+| Variable | Example | Description |
+|----------|---------|-------------|
+| `BINANCE_API_KEY` / `BINANCE_API_SECRET` | `test_key_placeholder` | Exchange credentials (placeholders OK in dry-run, rejected in live). |
+| `FT_API_USERNAME` / `FT_API_PASSWORD` | `freqtrader` / `changeme` | Bot API login (exporter + MCP server use these to poll the bot). |
+| `FT_ALLOW_LIVE` | `no` | Must be exactly `yes` to allow `mode: live`. Anything else blocks live renders. |
+
+Supports `${VAR}` and `${VAR:-default}`. Resolution order: `--env-file` override
+(`-e`) > `extra_env` > process env > `.env` file. Unresolved non-secret
+variables are a hard error; unresolved `secrets:` variables fall back to
+`DRY_RUN_PLACEHOLDER` in `dry_run`, and are a hard error in `live`.
+Placeholder-looking live secrets (empty, `${...}`, or containing
+`placeholder`/`changeme`/`example`, case-insensitive) are rejected.
+
+`ftctl` file lookup: `--config/-c` (default: `config/app.yaml`, fallback
+`config/app.yaml.example`), `--env-file/-e` (default: `config/.env`, fallback
+`.env`, else none).
+
+#### Deploy/runtime overlays (not in `app.yaml`)
+
+`deploy/compose/.env` (optional, beside the compose files; copy from
+`deploy/compose/.env.example` — a fresh clone works without it):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FREQTRADE_TAG` / `FREQTRADE_ARGS` | `stable` / `--strategy AiSignalStrategy` | Interpolation defaults for `docker compose config`; the **rendered** `.env.generated` (via `env_file`) is what containers actually see. Export it before building non-default tags: `set -a; source deploy/compose/.env.generated; set +a`. |
+| `INFERENCE_URL` | `http://inference:8000` | Compose-level override of the gateway URL. |
+| `FT_API_URL` / `FT_API_PORT` | `http://freqtrade:8080` / `8080` | Where the exporter and MCP server reach the bot. |
+| `INFERENCE_PORT` / `PROM_PORT` / `GRAFANA_PORT` | `8000` / `9090` / `3000` | Host ports (all bound to `127.0.0.1`). |
+| `MCP_ALLOW_WRITE` | `no` | `yes` (also `1`/`true`/`on`) registers the `pause_trading`/`force_exit` tools; otherwise the MCP server is read-only. There is no `force_enter` tool either way. |
+| `EXPORTER_POLL_INTERVAL_S` | `15` | Bot poll interval (`POLL_INTERVAL_S` in the container). |
+| `TZ` | `UTC` | Container timezone. |
+| `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` | `admin` / `admin` | Local Grafana login only. |
+
+Helm `deploy/helm/values.yaml` keys **not** emitted by `ftctl` (kept at chart
+defaults unless you override them): `freqtrade.image.repository`,
+`freqtrade.replicaCount` (must stay `1`), `freqtrade.apiPort`,
+`freqtrade.gpu.*` (mirrors the inference GPU toggle for PyTorch FreqAI),
+`freqtrade.resources` / `freqtrade.freqaiResources`,
+`freqtrade.persistence.*` (default 5 Gi for `user_data`),
+`inference.enabled/image/port/gpu/resources/modelsVolume`,
+`mcpServer.enabled/image/allowWrite` (Compose `--profile mcp` parity),
+`service.type` (ClusterIP-only, no Ingress),
+`serviceMonitor.enabled`, `secret.create` (dev/kind-only; create
+`freqtrade-secrets` out of band in real clusters).
+
+Service-level env vars (fixed, code defaults): gateway `APP_CONFIG_PATH`
+(default `config/app.yaml`, only `inference:` is read),
+`MODELS_DIR` (default `/models`), `PORT` (default `8000`); MCP client/exporter
+`FT_API_TIMEOUT_S` (default `10.0`), exporter `EXPORTER_PORT` (`9108`),
+`POLL_INTERVAL_S` (`15`). Hard-coded (not configurable): gateway MCP fan-out
+timeout 10 s, circuit breaker 3 failures / 60 s recovery, strategy gateway
+client 2 s timeout + 1 retry (on transport errors and 502/503/504 only),
+50 candles per `/v1/predict` call.
+
 ## Safety model
 
 - `mode: live` requires `FT_ALLOW_LIVE=yes` in the environment — otherwise `ftctl` exits non-zero with a clear message.

@@ -6,7 +6,7 @@
 #   docker compose -f deploy/compose/docker-compose.yml \
 #                  -f deploy/compose/docker-compose.gpu.yml up --build
 #
-# Then `GET http://127.0.0.1:8000/healthz` reports `"gpu": true` on an
+# Then `GET http://0.0.0.0:8000/healthz` reports `"gpu": true` on an
 # NVIDIA host. This override switches inference to the CUDA-based image and
 # reserves a GPU for it. For PyTorch *FreqAI* models the freqtrade service
 # needs a GPU too — see docker-compose.freqai-gpu.yml (separate override).

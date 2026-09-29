@@ -30,10 +30,26 @@ data:
         "pair_blacklist": []
       },
       "pairlists": [{"method": "StaticPairList"}],
+      "trading_mode": "spot",
+      "unfilledtimeout": {"entry": 10, "exit": 10, "exit_timeout_count": 0, "unit": "minutes"},
+      "entry_pricing": {
+        "price_side": "other",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "price_last_balance": 0.0,
+        "check_depth_of_market": {"enabled": false, "bids_to_ask_delta": 1}
+      },
+      "exit_pricing": {
+        "price_side": "other",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "price_last_balance": 0.0,
+        "check_depth_of_market": {"enabled": false, "bids_to_ask_delta": 1}
+      },
       "api_server": {
         "enabled": {{ .Values.apiServer.enabled }},
         "listen_ip_address": "0.0.0.0",
-        "port": {{ .Values.freqtrade.apiPort }},
+        "listen_port": {{ .Values.freqtrade.apiPort }},
         "username": "",
         "password": ""
       },

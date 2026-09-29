@@ -61,10 +61,44 @@ def render_freqtrade(cfg: AppConfig) -> dict[str, Any]:
             "pair_blacklist": [],
         },
         "pairlists": [{"method": "StaticPairList"}],
+        # --- Order execution defaults (required by Exchange.validate_config).
+        # The upstream image reads config["entry_pricing"] / config["exit_pricing"]
+        # with direct dict access, so omitting them crashes the bot with
+        # KeyError: 'exit_pricing' before schema defaults apply.
+        # price_side="other" (not the stock template's "same") because
+        # AiSignalStrategy uses market orders, which freqtrade requires to
+        # price from the opposite side of the book.
+        "trading_mode": "spot",
+        "unfilledtimeout": {
+            "entry": 10,
+            "exit": 10,
+            "exit_timeout_count": 0,
+            "unit": "minutes",
+        },
+        "entry_pricing": {
+            "price_side": "other",
+            "use_order_book": True,
+            "order_book_top": 1,
+            "price_last_balance": 0.0,
+            "check_depth_of_market": {
+                "enabled": False,
+                "bids_to_ask_delta": 1,
+            },
+        },
+        "exit_pricing": {
+            "price_side": "other",
+            "use_order_book": True,
+            "order_book_top": 1,
+            "price_last_balance": 0.0,
+            "check_depth_of_market": {
+                "enabled": False,
+                "bids_to_ask_delta": 1,
+            },
+        },
         "api_server": {
             "enabled": True,
             "listen_ip_address": API_LISTEN_IP,
-            "port": API_PORT,
+            "listen_port": API_PORT,
             "username": cfg.secrets.ft_api_username,
             "password": cfg.secrets.ft_api_password,
         },

@@ -16,7 +16,7 @@ COPY common/ ./common/
 COPY mcp_server/ ./mcp_server/
 COPY monitoring/ ./monitoring/
 
-RUN pip install --no-cache-dir ".[gateway]"
+RUN pip install --no-cache-dir ".[gateway,mcp]"
 
 EXPOSE 9108
 
