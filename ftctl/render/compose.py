@@ -12,6 +12,7 @@ from ftctl.render.freqtrade import freqtrade_args, freqtrade_tag
 
 
 def _quote(value: str) -> str:
+    """Double-quote a dotenv value when it contains spaces or special chars."""
     if any(ch in value for ch in (" ", "#", '"', "'")):
         return '"' + value.replace('"', '\\"') + '"'
     return value

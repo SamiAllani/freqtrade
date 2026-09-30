@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ExchangeConfig(BaseModel):
+    """Exchange and stake settings: name, pair whitelist, and stake limits."""
+
     name: str = "binance"
     pairs: list[str] = Field(default_factory=list)
     stake_currency: str = "USDT"
@@ -18,6 +20,8 @@ class ExchangeConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
+    """Signal strategy settings: source, name, timeframe, entry/exit thresholds."""
+
     signal_source: Literal["gateway", "freqai", "hybrid"] = "gateway"
     name: str = "AiSignalStrategy"
     timeframe: str = "5m"
@@ -27,17 +31,23 @@ class StrategyConfig(BaseModel):
 
 
 class FeatureParameters(BaseModel):
+    """FreqAI feature parameters: timeframes, correlation pairs, label horizon."""
+
     include_timeframes: list[str] = Field(default_factory=lambda: ["5m", "1h"])
     include_corr_pairlist: list[str] = Field(default_factory=list)
     label_period_candles: int = 24
 
 
 class DataSplitParameters(BaseModel):
+    """Train/test split settings for FreqAI model fitting."""
+
     test_size: float = 0.33
     shuffle: bool = False
 
 
 class FreqAiConfig(BaseModel):
+    """FreqAI block: enable flag, identifier, model class, windows and params."""
+
     enabled: bool = False
     identifier: str = "ft-freqai-v1"
     model: str = "LightGBMRegressor"
@@ -51,6 +61,8 @@ class FreqAiConfig(BaseModel):
 
 
 class ModelSpec(BaseModel):
+    """One inference model entry: backend plus its device/server/tool options."""
+
     backend: Literal["local", "mcp"]
     device: Literal["auto", "cuda", "cpu"] | None = None
     server: str | None = None
@@ -58,22 +70,30 @@ class ModelSpec(BaseModel):
 
 
 class InferenceConfig(BaseModel):
+    """Inference gateway settings: base URL, default model, model registry."""
+
     url: str = "http://inference:8000"
     default_model: str = "local-gru"
     models: dict[str, ModelSpec] = Field(default_factory=dict)
 
 
 class McpServerSpec(BaseModel):
+    """One MCP server entry: transport plus its stdio ``command`` or http ``url``."""
+
     transport: Literal["stdio", "http"]
     command: list[str] | None = None
     url: str | None = None
 
 
 class McpConfig(BaseModel):
+    """Collection of MCP servers keyed by name."""
+
     servers: dict[str, McpServerSpec] = Field(default_factory=dict)
 
 
 class SecretsConfig(BaseModel):
+    """Secret fields, always ``${ENV_VAR}`` references (never literals)."""
+
     binance_key: str = ""
     binance_secret: str = ""
     ft_api_username: str = ""
@@ -81,6 +101,8 @@ class SecretsConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    """Root application config validated from the central ``app.yaml``."""
+
     mode: Literal["dry_run", "live"] = "dry_run"
     exchange: ExchangeConfig = Field(default_factory=ExchangeConfig)
     strategy: StrategyConfig = Field(default_factory=StrategyConfig)
@@ -91,6 +113,7 @@ class AppConfig(BaseModel):
 
     @model_validator(mode="after")
     def _check_freqai_enabled(self) -> "AppConfig":
+        """Reject freqai/hybrid signal sources unless ``freqai.enabled`` is true."""
         if self.strategy.signal_source in ("freqai", "hybrid") and not self.freqai.enabled:
             raise ValueError(
                 f"strategy.signal_source={self.strategy.signal_source!r} "
@@ -100,6 +123,8 @@ class AppConfig(BaseModel):
 
 
 class Candle(BaseModel):
+    """One OHLCV candle as sent to the inference API."""
+
     t: int
     o: float
     h: float
@@ -109,6 +134,8 @@ class Candle(BaseModel):
 
 
 class PredictRequest(BaseModel):
+    """Inference request: pair/timeframe/model plus a candle window."""
+
     pair: str
     timeframe: str = "5m"
     model: str = "local-gru"
@@ -116,6 +143,8 @@ class PredictRequest(BaseModel):
 
 
 class PredictResponse(BaseModel):
+    """Inference response: signal, confidence, model/backend and latency."""
+
     signal: float = Field(ge=-1.0, le=1.0)
     confidence: float = Field(ge=0.0, le=1.0)
     model: str

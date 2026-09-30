@@ -8,6 +8,11 @@ Kubernetes, and **Prometheus + Grafana** observability.
 **Safety default: `dry_run: true` everywhere.** Live trading requires an explicit
 `mode: live` in the central config **and** `FT_ALLOW_LIVE=yes` in the environment.
 
+> New here? Start with [docs/TUTORIAL.md](docs/TUTORIAL.md) for a hands-on
+> walkthrough, including running Freqtrade with different strategies. For the
+> individual strategy class fields (`stoploss`, `minimal_roi`, `order_types`, …)
+> see [docs/STRATEGIES.md](docs/STRATEGIES.md).
+>
 > Not trading advice. Backtest and paper-trade before risking any capital.
 > See [SPEC.md](SPEC.md) for the full task breakdown, architecture, and contracts.
 
@@ -370,6 +375,9 @@ out-of-range numbers are clamped), with lazy connect, per-call timeout (default
 Servers are configurable only via `app.yaml`.
 
 ## Strategies
+
+Field-by-field reference for the strategy class (what each attribute does, with
+this repo's values): **[docs/STRATEGIES.md](docs/STRATEGIES.md)**.
 
 `freqtrade/user_data/strategies/`:
 

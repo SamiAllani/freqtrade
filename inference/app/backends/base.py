@@ -17,6 +17,8 @@ class WindowTooSmallError(ValueError):
 
 
 class Backend(Protocol):
+    """Structural interface every inference backend implements."""
+
     async def predict(self, req: PredictRequest) -> PredictResponse:
         """Run inference for ``req`` and return a contract response."""
         ...

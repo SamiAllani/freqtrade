@@ -33,23 +33,33 @@ class MisconfiguredBackendError(BackendError):
 
 
 def _unavailable_mcp_backend(model_name: str, detail: str) -> Backend:
+    """Build a placeholder backend that always fails (missing MCP extras)."""
+
     class _UnavailableMcp:
+        """Stand-in backend raising :class:`BackendError` on every predict."""
+
         async def predict(self, req: PredictRequest) -> PredictResponse:
+            """Always raise :class:`BackendError` (HTTP 502) for this model."""
             raise BackendError(f"mcp backend for model {model_name!r} unavailable: {detail}")
 
     return _UnavailableMcp()  # type: ignore[return-value]
 
 
 class BackendRegistry:
+    """Maps model names to backends and resolves request routing."""
+
     def __init__(self, default_model: str = "local-gru") -> None:
+        """Create an empty registry with the given default model name."""
         self.default_model = default_model
         self._backends: dict[str, Backend] = {}
 
     def register(self, name: str, backend: Backend) -> None:
+        """Register ``backend`` under ``name`` (overwrites any existing entry)."""
         self._backends[name] = backend
 
     @classmethod
     def from_config(cls, cfg: AppConfig, models_dir: str | None = None) -> BackendRegistry:
+        """Build a registry from ``inference.models``, adding a local default."""
         reg = cls(default_model=cfg.inference.default_model)
         base_dir = models_dir or os.environ.get("MODELS_DIR", "/models")
         for name, spec in cfg.inference.models.items():
@@ -94,6 +104,7 @@ class BackendRegistry:
             raise UnknownModelError(f"unknown model {requested!r}") from None
 
     def model_names(self) -> list[str]:
+        """Return the sorted names of all registered models."""
         return sorted(self._backends)
 
 

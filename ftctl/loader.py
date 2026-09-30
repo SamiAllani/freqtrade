@@ -74,7 +74,10 @@ def _secret_var_names(raw: Mapping[str, Any]) -> set[str]:
 def _interpolate_string(
     value: str, env: Mapping[str, str], secret_vars: set[str], mode: str
 ) -> str:
+    """Substitute ``${VAR}``/``${VAR:-default}`` references in one string."""
+
     def _replace(match: re.Match[str]) -> str:
+        """Resolve a single ``${VAR}`` match from env, default or placeholder."""
         name, default = match.group(1), match.group(2)
         if name in env:
             return env[name]

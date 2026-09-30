@@ -57,14 +57,17 @@ class ToolOutputError(BackendError):
 
 
 def clamp_signal(value: float) -> float:
+    """Clamp a signal into the contract range ``[-1.0, 1.0]``."""
     return max(-1.0, min(1.0, float(value)))
 
 
 def clamp_confidence(value: float) -> float:
+    """Clamp a confidence into the contract range ``[0.0, 1.0]``."""
     return max(0.0, min(1.0, float(value)))
 
 
 def _returns(closes: Sequence[float]) -> list[float]:
+    """Simple returns r[i] = c[i]/c[i-1] - 1, guarded against zero prices."""
     out: list[float] = []
     for prev, cur in zip(closes[:-1], closes[1:], strict=True):
         out.append(0.0 if prev == 0 else cur / prev - 1.0)
@@ -264,6 +267,7 @@ class McpBackend:
         summary_window: int | None = None,
         caller_factory: CallerFactory | None = None,
     ) -> None:
+        """Resolve server/tool settings and build the connection pool."""
         resolved_name = name or model_name or (spec.tool if spec else None) or "mcp"
         self.model_name = resolved_name
         self.server = server or (spec.server if spec else None)
@@ -296,10 +300,12 @@ class McpBackend:
         return loaded
 
     def _ensure_specs(self) -> None:
+        """Trigger the lazy ``app.yaml`` server-spec load if not provided."""
         if self._servers is None:
             _ = self.server_specs  # triggers lazy load + pool.configure
 
     async def predict(self, req: PredictRequest) -> PredictResponse:
+        """Call the configured MCP tool and map its result to a prediction."""
         start = time.perf_counter()
         if not self.server or not self.tool:
             raise BackendError(

@@ -66,6 +66,7 @@ class CircuitBreaker:
         time_fn: Callable[[], float] | None = None,
         name: str = "",
     ) -> None:
+        """Initialise breaker thresholds, clock and a closed state."""
         if failure_threshold < 1:
             raise ValueError("failure_threshold must be >= 1")
         self.failure_threshold = failure_threshold
@@ -79,12 +80,14 @@ class CircuitBreaker:
 
     @property
     def state(self) -> str:
+        """Current state, promoting an expired OPEN breaker to HALF_OPEN."""
         if self._state == self.OPEN and self._time() - self._opened_at >= self.recovery_timeout:
             return self.HALF_OPEN
         return self._state
 
     @property
     def consecutive_failures(self) -> int:
+        """Number of failures recorded since the last success."""
         return self._consecutive_failures
 
     def can_execute(self) -> bool:
@@ -116,11 +119,13 @@ class CircuitBreaker:
         return max(0.0, self.recovery_timeout - (self._time() - self._opened_at))
 
     def record_success(self) -> None:
+        """Close the breaker and reset the failure counter."""
         self._consecutive_failures = 0
         self._state = self.CLOSED
         self._trial_in_flight = False
 
     def record_failure(self) -> None:
+        """Count a failure and open the breaker at the threshold."""
         self._consecutive_failures += 1
         self._trial_in_flight = False
         if self._consecutive_failures >= self.failure_threshold:
@@ -141,6 +146,7 @@ CallerFactory = Callable[[str, McpServerSpec], ToolCaller]
 
 
 def _require_mcp_sdk() -> None:
+    """Raise :class:`BackendError` when the ``mcp`` SDK is not installed."""
     try:
         import mcp  # noqa: F401
     except ImportError as exc:
@@ -159,6 +165,7 @@ class _McpSession:
     """
 
     def __init__(self, server_name: str, spec: McpServerSpec) -> None:
+        """Store the server spec and prepare a lazy, locked session slot."""
         self.server_name = server_name
         self.spec = spec
         self._lock = asyncio.Lock()
@@ -166,15 +173,18 @@ class _McpSession:
         self._exits: list[Any] = []
 
     async def _open(self) -> Any:
+        """Open and initialise the SDK session (implemented by subclasses)."""
         raise NotImplementedError
 
     async def _ensure(self) -> Any:
+        """Return the cached session, connecting lazily on first use."""
         async with self._lock:
             if self._session is None:
                 self._session = await self._open()
             return self._session
 
     async def ainvalidate(self) -> None:
+        """Drop the session and close its context managers (best effort)."""
         async with self._lock:
             session, self._session = self._session, None
             exits, self._exits = self._exits, []
@@ -186,9 +196,11 @@ class _McpSession:
         _ = session
 
     async def call_tool(self, tool: str, arguments: dict[str, Any], timeout: float) -> Any:
+        """Call ``tool`` on the session, bounded by ``timeout`` seconds."""
         session = await self._ensure()
 
         async def _invoke() -> Any:
+            """Invoke the SDK tool call, wrapped by ``asyncio.wait_for``."""
             return await session.call_tool(tool, arguments)
 
         return await asyncio.wait_for(_invoke(), timeout=timeout)
@@ -198,6 +210,7 @@ class _StdioSession(_McpSession):
     """``stdio`` transport: spawns ``spec.command`` via the MCP SDK."""
 
     async def _open(self) -> Any:
+        """Spawn the stdio server and initialise the SDK client session."""
         _require_mcp_sdk()
         if not self.spec.command:
             raise BackendError(f"mcp server {self.server_name!r}: stdio needs 'command'")
@@ -223,6 +236,7 @@ class _HttpSession(_McpSession):
     """``http`` transport: streamable HTTP via the MCP SDK."""
 
     async def _open(self) -> Any:
+        """Open a streamable-HTTP connection and initialise the session."""
         _require_mcp_sdk()
         if not self.spec.url:
             raise BackendError(f"mcp server {self.server_name!r}: http needs 'url'")
@@ -270,6 +284,7 @@ class McpConnectionPool:
         caller_factory: CallerFactory | None = None,
         time_fn: Callable[[], float] | None = None,
     ) -> None:
+        """Configure servers, breaker settings and the caller factory."""
         self._servers: dict[str, McpServerSpec] = dict(servers or {})
         self.default_timeout = default_timeout
         self.failure_threshold = failure_threshold
@@ -285,6 +300,7 @@ class McpConnectionPool:
         self._servers = dict(servers)
 
     def breaker_for(self, server: str) -> CircuitBreaker:
+        """Return the breaker for ``server``, creating it on first access."""
         breaker = self._breakers.get(server)
         if breaker is None:
             breaker = CircuitBreaker(
@@ -297,9 +313,11 @@ class McpConnectionPool:
         return breaker
 
     def breaker_state(self, server: str) -> str:
+        """Return the current circuit-breaker state for ``server``."""
         return self.breaker_for(server).state
 
     async def _get_caller(self, server: str) -> ToolCaller:
+        """Return the cached tool caller, building it lazily if needed."""
         async with self._lock:
             caller = self._callers.get(server)
             if caller is None:
@@ -312,6 +330,7 @@ class McpConnectionPool:
             return caller
 
     async def _drop_caller(self, server: str) -> None:
+        """Drop and invalidate the cached caller so the next call reconnects."""
         async with self._lock:
             caller = self._callers.pop(server, None)
         invalidate = getattr(caller, "__self__", None)

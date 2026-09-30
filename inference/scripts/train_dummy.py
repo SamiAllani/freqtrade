@@ -23,6 +23,7 @@ from pathlib import Path
 
 
 def gen_series(n: int, seed: int = 7) -> list[float]:
+    """Generate a synthetic random-walk price series of ``n`` points."""
     rng = random.Random(seed)
     price = 100.0
     out = [price]
@@ -49,6 +50,7 @@ def windows(closes: list[float], window: int) -> tuple[list[list[float]], list[f
 
 
 def train_torch(xs: list[list[float]], ys: list[float], epochs: int) -> dict:
+    """Train :class:`SignalGRU` on ``xs``/``ys`` and return its state dict."""
     import torch
 
     from inference.app.backends.local_torch import SignalGRU
@@ -68,6 +70,7 @@ def train_torch(xs: list[list[float]], ys: list[float], epochs: int) -> dict:
 
 
 def main(argv: list[str] | None = None) -> Path:
+    """CLI entry point: train the dummy model and return the output path."""
     p = argparse.ArgumentParser(description="Train a dummy GRU model.")
     p.add_argument("--out", default="/models/local-gru.pt")
     p.add_argument("--samples", type=int, default=2000)

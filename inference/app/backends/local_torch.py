@@ -62,22 +62,28 @@ if TORCH_AVAILABLE:
         """Tiny baseline: one-layer GRU over normalized returns -> signal."""
 
         def __init__(self, input_size: int = 1, hidden_size: int = 16, num_layers: int = 1) -> None:
+            """Build the GRU and its linear output head."""
             super().__init__()
             self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True)
             self.head = nn.Linear(hidden_size, 1)
 
         def forward(self, x: Any) -> Any:
+            """Run the GRU over ``x`` and project the final hidden state."""
             _, h = self.gru(x)
             return self.head(h[-1])
 
 else:  # placeholder so attribute access fails loudly, not silently
 
     class SignalGRU:  # type: ignore[no-redef]
+        """Placeholder used when torch is missing; construction always fails."""
+
         def __init__(self, *args: Any, **kwargs: Any) -> None:
+            """Raise :class:`BackendError` because torch is not installed."""
             raise BackendError("torch is not installed; install the 'gpu' extra")
 
 
 def _closes(req: PredictRequest) -> list[float]:
+    """Return the close prices of a request's candles."""
     return [c.c for c in req.candles]
 
 
@@ -122,6 +128,7 @@ class LocalTorchBackend:
         models_dir: str | Path = DEFAULT_MODELS_DIR,
         window: int = DEFAULT_WINDOW,
     ) -> None:
+        """Resolve the device, store settings, and attempt to load weights."""
         self.model_name = model_name
         self.device_pref = (device or "auto").lower()
         self.device = resolve_device(self.device_pref)
@@ -133,9 +140,11 @@ class LocalTorchBackend:
 
     # -- model loading --------------------------------------------------
     def _weights_path(self) -> Path:
+        """Path of the ``<model>.pt`` torch state dict under ``models_dir``."""
         return self.models_dir / f"{self.model_name}.pt"
 
     def _load_model(self) -> None:
+        """Load torch weights if present; log and fall back to heuristic."""
         if not TORCH_AVAILABLE:
             logger.info("torch not installed; %s uses heuristic inference", self.model_name)
             return
@@ -200,6 +209,7 @@ class LocalTorchBackend:
             raise BackendError(f"torch inference failed: {exc}") from exc
 
     async def predict(self, req: PredictRequest) -> PredictResponse:
+        """Return a signal/confidence prediction from the GRU or heuristic."""
         start = time.perf_counter()
         if len(req.candles) < self.window + 1:
             raise WindowTooSmallError(

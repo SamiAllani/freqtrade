@@ -43,6 +43,7 @@ class FreqtradeApiError(Exception):
     """Base error for Freqtrade REST failures."""
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
+        """Store the message and optional HTTP status code."""
         super().__init__(message)
         self.status_code = status_code
 
@@ -70,6 +71,7 @@ class FreqtradeClient:
         timeout: float = DEFAULT_TIMEOUT_S,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
+        """Store connection settings and create the underlying HTTP client."""
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.timeout = timeout
@@ -150,12 +152,14 @@ class FreqtradeClient:
     # -- low-level request -------------------------------------------------
 
     def _auth_headers(self) -> dict[str, str]:
+        """Return the Bearer authorization header for the current token."""
         token = self._access_token or ""
         return {"Authorization": f"Bearer {token}"}
 
     def _request(
         self, method: str, path: str, *, json: Any = None, _retried: bool = False
     ) -> httpx.Response:
+        """Send a request, renewing the session once on a 401 response."""
         if self._access_token is None:
             self.login()
         url = f"{self.base_url}{API_PREFIX}{path}"
@@ -173,6 +177,7 @@ class FreqtradeClient:
         return resp
 
     def _check(self, resp: httpx.Response, method: str, path: str) -> None:
+        """Raise an auth/API error for 401 or any 4xx/5xx response."""
         if resp.status_code == 401:
             raise AuthError(f"unauthorized calling {method} {path} (check credentials)")
         if resp.status_code >= 400:
@@ -182,6 +187,7 @@ class FreqtradeClient:
             )
 
     def _call(self, method: str, path: str, *, json: Any = None) -> Any:
+        """Perform a request, check the status and decode the JSON body."""
         resp = self._request(method, path, json=json)
         self._check(resp, method, path)
         try:
@@ -242,10 +248,13 @@ class FreqtradeClient:
     # -- lifecycle ----------------------------------------------------------
 
     def close(self) -> None:
+        """Close the underlying HTTP client and its connections."""
         self._http.close()
 
     def __enter__(self) -> FreqtradeClient:
+        """Enter the client's context manager, returning ``self``."""
         return self
 
     def __exit__(self, *exc_info: Any) -> None:
+        """Close the HTTP client when leaving the context."""
         self.close()

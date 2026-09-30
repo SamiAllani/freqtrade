@@ -66,6 +66,7 @@ def is_write_enabled() -> bool:
 
 
 def _error_result(exc: Exception) -> dict[str, Any]:
+    """Return a structured error result instead of raising to the MCP client."""
     logger.warning("bot tool failed: %s", exc)
     return {"ok": False, "error": str(exc)}
 

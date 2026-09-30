@@ -182,6 +182,7 @@ class FreqtradeExporter:
     """Poll loop that refreshes the Prometheus gauges from the bot API."""
 
     def __init__(self, client: FreqtradeClient | None = None) -> None:
+        """Use the given client, or build one from ``FT_API_*`` env vars."""
         self.client = client if client is not None else FreqtradeClient.from_env()
 
     def poll_once(self) -> bool:
@@ -228,12 +229,14 @@ class FreqtradeExporter:
         return True
 
     def run_forever(self, interval_s: float = POLL_INTERVAL_S) -> None:
+        """Poll the bot repeatedly, sleeping ``interval_s`` seconds between runs."""
         while True:
             self.poll_once()
             time.sleep(max(1.0, interval_s))
 
 
 def main() -> None:
+    """Start the Prometheus HTTP server and run the poll loop forever."""
     logging.basicConfig(level=logging.INFO)
     port = int(os.environ.get("EXPORTER_PORT", str(EXPORTER_PORT)))
     interval = float(os.environ.get("POLL_INTERVAL_S", str(POLL_INTERVAL_S)))

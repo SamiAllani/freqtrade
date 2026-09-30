@@ -45,6 +45,7 @@ CHECKS: list[tuple[str, str]] = []
 
 
 def check(name: str, ok: bool, detail: str = "") -> bool:
+    """Record and print one named check; returns ``ok`` for chaining."""
     status = "PASS" if ok else "FAIL"
     CHECKS.append((name, status))
     suffix = f" — {detail}" if detail and not ok else ""
@@ -53,6 +54,7 @@ def check(name: str, ok: bool, detail: str = "") -> bool:
 
 
 def main() -> int:
+    """Run all dry-run checks and return 0 on success, 1 on any failure."""
     parser = argparse.ArgumentParser(description="Verify the dry-run stack end to end.")
     parser.add_argument("--config", default=str(REPO / "config" / "app.yaml.example"))
     parser.add_argument("--env-file", default=str(REPO / "config" / ".env.example"))

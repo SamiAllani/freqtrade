@@ -53,6 +53,7 @@ def resolve_env_file(env_file: Path | None) -> Path | None:
 
 
 def _load(config: Path | None, env_file: Path | None):  # type: ignore[no-untyped-def]
+    """Resolve config/env paths and load the validated :class:`AppConfig`."""
     config_path = resolve_config_path(config)
     return config_path, load_config(config_path, resolve_env_file(env_file))
 

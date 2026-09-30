@@ -47,6 +47,7 @@ GPU_AVAILABLE = Gauge(
 
 
 def default_config() -> AppConfig:
+    """Return a local-only :class:`AppConfig` with the baseline GRU model."""
     return AppConfig(
         inference=InferenceConfig(
             default_model="local-gru",
@@ -90,11 +91,13 @@ def load_config(path: str | Path | None = None) -> AppConfig:
 
 
 def create_app(cfg: AppConfig | None = None) -> FastAPI:
+    """Build the FastAPI gateway, wiring the backend registry and routes."""
     config = cfg or load_config()
     registry = BackendRegistry.from_config(config)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+        """Attach the registry/config to app state for the app's lifetime."""
         app.state.registry = registry
         app.state.config = config
         yield
@@ -105,6 +108,7 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
 
     @app.post("/v1/predict")
     async def predict(req: PredictRequest):  # type: ignore[no-untyped-def]
+        """Resolve the model and return a prediction, mapping errors to HTTP."""
         try:
             name, backend = registry.resolve(req.model)
         except UnknownModelError as exc:
@@ -128,6 +132,7 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
 
     @app.get("/healthz")
     async def healthz() -> dict:
+        """Report service liveness, GPU availability, and registered models."""
         return {
             "status": "ok",
             "gpu": gpu_available(),
@@ -136,6 +141,7 @@ def create_app(cfg: AppConfig | None = None) -> FastAPI:
 
     @app.get("/metrics")
     async def metrics() -> Response:
+        """Expose Prometheus metrics, refreshing the GPU gauge on each scrape."""
         # Refresh the GPU gauge on every scrape so restarts / device changes
         # are visible without a process restart. Cheap: single cuda check.
         try:
@@ -151,6 +157,7 @@ app = create_app()
 
 
 def main() -> None:  # pragma: no cover - exercised via uvicorn/Docker
+    """Run the gateway under uvicorn (container entrypoint)."""
     import uvicorn
 
     uvicorn.run(
