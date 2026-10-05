@@ -156,7 +156,6 @@ jobs:
           from ftctl.render.freqtrade import render_freqtrade, freqtrade_args
 
           data = yaml.safe_load(open("config/app.yaml.example"))
-          data["strategy"]["signal_source"] = "freqai"
           data["freqai"].update({"enabled": True, "model": "LightGBMRegressor",
                                  "train_period_days": 3, "backtest_period_days": 2})
           cfg = AppConfig.model_validate(data)
@@ -165,23 +164,6 @@ jobs:
           assert "model" not in doc["freqai"], "model goes via --freqaimodel, not config.json"
           assert "--freqaimodel" in freqtrade_args(cfg), freqtrade_args(cfg)
           print("freqai smoke render OK")
-          EOF
-      - name: FreqAI smoke — freqai source without enabled is rejected
-        run: |
-          python - <<'EOF'
-          import yaml
-          from ftctl.loader import ConfigError, load_config
-
-          data = yaml.safe_load(open("config/app.yaml.example"))
-          data["strategy"]["signal_source"] = "freqai"
-          data["freqai"]["enabled"] = False
-          open("/tmp/app-freqai-invalid.yaml", "w").write(yaml.safe_dump(data))
-          try:
-              load_config("/tmp/app-freqai-invalid.yaml", "config/.env.example")
-          except ConfigError as exc:
-              print(f"correctly rejected: {exc}")
-          else:
-              raise SystemExit("signal_source=freqai without freqai.enabled was accepted")
           EOF
       - name: FreqAI backtesting (runs when Task 11 strategy + data exist)
         run: |

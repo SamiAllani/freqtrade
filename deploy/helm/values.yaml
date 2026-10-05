@@ -26,7 +26,6 @@ exchange:
 
 strategy:
   name: AiSignalStrategy
-  signalSource: gateway # gateway | freqai | hybrid
   timeframe: 5m
   entrySignalMin: 0.4
   entryConfidenceMin: 0.6

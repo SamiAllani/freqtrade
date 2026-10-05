@@ -73,7 +73,6 @@ exchange:
   stake_amount: 50
   max_stake: 100
 strategy:
-  signal_source: gateway
   name: AiSignalStrategy
   timeframe: 5m
   entry_signal_min: 0.4

@@ -70,8 +70,8 @@ docker compose -f deploy/compose/docker-compose.yml \
 `stable_freqai` | `stable_freqaitorch`) and `FREQTRADE_ARGS`
 (`--strategy <Name> [--freqaimodel <Model>]`) into `.env.generated`.
 Compose passes the tag as the `freqtrade` build arg and the shell expands
-`FREQTRADE_ARGS` in the container command, so `strategy.signal_source`
-(`gateway` | `freqai` | `hybrid`) switches without editing compose files.
+`FREQTRADE_ARGS` in the container command, so the strategy (and
+`--freqaimodel` when FreqAI is enabled) switches without editing compose files.
 
 Caveats:
 

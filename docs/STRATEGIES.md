@@ -99,7 +99,7 @@ order_types = {
 |----------------|-------------|
 | `informative_pairs()` | Return `[("ETH/USDT", "1h"), …]` to load extra timeframes. |
 | `informative_timeframe()` | Removed in interface v3 — use `informative_pairs()`. |
-| FreqAI `feature_engineering_*` | Feature hooks used when `signal_source: freqai` (see [TUTORIAL §4.7](TUTORIAL.md#47-freqai-and-hybrid-strategies)). |
+| FreqAI `feature_engineering_*` | Feature hooks used by FreqAI strategies (see [TUTORIAL §4.6](TUTORIAL.md#46-freqai-and-hybrid-strategies)). |
 
 ---
 

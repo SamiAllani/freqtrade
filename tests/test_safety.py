@@ -5,7 +5,6 @@ These are the guard rails that keep the bot from accidentally trading live:
 - the example ``app.yaml`` renders ``dry_run: true`` on every target;
 - flipping the default to live fails without ``FT_ALLOW_LIVE=yes``;
 - secret *values* never appear in Helm values, ``ftctl show`` output, or logs;
-- ``signal_source: freqai`` without ``freqai.enabled`` is rejected;
 - generated/secret-bearing local files are git-ignored.
 """
 
@@ -17,13 +16,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from common.contracts import AppConfig
 from ftctl.cli import app
 from ftctl.guards import GuardError, check_guards
-from ftctl.loader import ConfigError, load_config
+from ftctl.loader import load_config
 from ftctl.render.compose import render_compose
 from ftctl.render.freqtrade import render_freqtrade
 from ftctl.render.helm import render_helm
@@ -228,38 +226,7 @@ def test_env_example_has_no_real_credentials() -> None:
         )
 
 
-# --- FreqAI validation ------------------------------------------------------
-
-
-@pytest.mark.parametrize("signal_source", ["freqai", "hybrid"])
-def test_freqai_signal_source_without_enabled_is_rejected(
-    clean_env: None, signal_source: str
-) -> None:
-    data = yaml.safe_load(EXAMPLE_CONFIG.read_text())
-    data["strategy"]["signal_source"] = signal_source
-    data["freqai"]["enabled"] = False
-    with pytest.raises(ValidationError, match="freqai.enabled"):
-        AppConfig.model_validate(data)
-
-
-@pytest.mark.parametrize("signal_source", ["freqai", "hybrid"])
-def test_freqai_signal_source_with_enabled_is_accepted(clean_env: None, signal_source: str) -> None:
-    data = yaml.safe_load(EXAMPLE_CONFIG.read_text())
-    data["strategy"]["signal_source"] = signal_source
-    data["freqai"]["enabled"] = True
-    cfg = AppConfig.model_validate(data)
-    assert cfg.strategy.signal_source == signal_source
-    assert cfg.freqai.enabled is True
-
-
-def test_freqai_loader_rejects_unenabled_source(tmp_path: Path, clean_env: None) -> None:
-    data = yaml.safe_load(EXAMPLE_CONFIG.read_text())
-    data["strategy"]["signal_source"] = "freqai"
-    data["freqai"]["enabled"] = False
-    config = tmp_path / "app.yaml"
-    config.write_text(yaml.safe_dump(data))
-    with pytest.raises(ConfigError):
-        load_config(config, EXAMPLE_ENV)
+# --- FreqAI config ----------------------------------------------------------
 
 
 def test_freqai_example_keeps_time_ordered_split(clean_env: None) -> None:
@@ -282,7 +249,6 @@ def test_no_hardcoded_live_secrets_in_examples() -> None:
 def test_rendered_freqtrade_with_short_train_period_for_ci(tmp_path: Path) -> None:
     """CI smoke-test shape: a small FreqAI config renders a valid freqai block."""
     data: dict = copy.deepcopy(yaml.safe_load(EXAMPLE_CONFIG.read_text()))
-    data["strategy"]["signal_source"] = "freqai"
     data["freqai"].update({"enabled": True, "model": "LightGBMRegressor", "train_period_days": 3})
     cfg = AppConfig.model_validate(data)
     doc = render_freqtrade(cfg)

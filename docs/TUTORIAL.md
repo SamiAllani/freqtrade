@@ -31,12 +31,11 @@ config/app.yaml + config/.env
    └────────────────────────────────────────────┘
 ```
 
-Two fields select the strategy, and they are coupled:
+These fields select the strategy and its tunables:
 
 | `app.yaml` field                | Becomes                                             |
 |---------------------------------|-----------------------------------------------------|
 | `strategy.name`                 | Freqtrade `--strategy <name>` **and** `config.json` `strategy` |
-| `strategy.signal_source`        | `FT_SIGNAL_SOURCE` / Helm `strategy.signalSource`   |
 | `strategy.entry_*` / `exit_*`   | `config.json` → `strategy_params` (read by the strategy) |
 
 **Key consequence:** the strategy is chosen by name from
@@ -61,8 +60,8 @@ cp config/.env.example config/.env
 cp config/app.yaml.example config/app.yaml
 ```
 
-The config defaults use `strategy: AiSignalStrategy` and
-`signal_source: gateway`. Leave them as-is for the first run.
+The config defaults use `strategy: AiSignalStrategy`. Leave it as-is for the
+first run.
 
 ---
 
@@ -150,7 +149,6 @@ Tune it **without touching code** by editing `config/app.yaml`:
 
 ```yaml
 strategy:
-  signal_source: gateway
   name: AiSignalStrategy
   timeframe: 5m
   entry_signal_min: 0.4       # enter above this signal
@@ -160,29 +158,9 @@ strategy:
 
 Which model the strategy asks for comes from the `inference:` section
 (`default_model`, per-model `backend: local|mcp`). See
-[§4.6](#46-switching-the-inference-model-backend) for details.
+[§4.5](#45-switching-the-inference-model-backend) for details.
 
-### 4.3 The three `signal_source` values
-
-| `signal_source` | Strategy it expects | Status in this repo |
-|-----------------|---------------------|---------------------|
-| `gateway`       | `AiSignalStrategy`  | ✅ Implemented |
-| `freqai`        | `FreqAiStrategy`    | ⚠️ Plumbing only (config/image render, but the `.py` is not included yet) |
-| `hybrid`        | `HybridStrategy`    | ⚠️ Same as FreqAI — reuses `_inference_client.py` when added |
-
-`common/contracts.py` **rejects** `signal_source: freqai|hybrid` unless
-`freqai.enabled: true`:
-
-```yaml
-strategy: {signal_source: freqai}
-freqai:   {enabled: true, ...}
-```
-
-To actually run `freqai`/`hybrid` today you must add the corresponding strategy
-file (see [§4.5](#45-adding-your-own-strategy)); otherwise Freqtrade will fail to
-resolve the strategy name at startup.
-
-### 4.4 Running a different (stock or custom) strategy
+### 4.3 Running a different (stock or custom) strategy
 
 Any standard Freqtrade `IStrategy` works. Two steps:
 
@@ -234,8 +212,7 @@ class MyRsiStrategy(IStrategy):
 
 ```yaml
 strategy:
-  signal_source: gateway   # this example doesn't call the gateway, but the value
-  name: MyRsiStrategy      # is still required by the contract
+  name: MyRsiStrategy
   timeframe: 5m
 ```
 
@@ -262,7 +239,7 @@ docker compose -f deploy/compose/docker-compose.yml logs freqtrade | grep -i str
 > the same way. If it lives in a subdirectory, either move it directly into
 > `user_data/strategies/` or pass `--strategy-path` via `FREQTRADE_ARGS`.
 
-### 4.5 Adding your own strategy
+### 4.4 Adding your own strategy
 
 For anything beyond the example above, follow the Freqtrade strategy contract:
 
@@ -299,13 +276,13 @@ For anything beyond the example above, follow the Freqtrade strategy contract:
    ```
 
 6. **Select it** by name in `app.yaml` and re-render as in
-   [§4.4](#44-running-a-different-stock-or-custom-strategy).
+   [§4.3](#43-running-a-different-stock-or-custom-strategy).
 
 The shared client (`_inference_client.py`) is deliberately fail-safe: a 2 s
 timeout, one retry on transport errors and 502/503/504 (no retry on 404/422),
 and `None` on any failure so your strategy can fall back instead of raising.
 
-### 4.6 Switching the inference model / backend
+### 4.5 Switching the inference model / backend
 
 `AiSignalStrategy` asks for a model name resolved by the gateway's registry.
 Change which backend serves it in `config/app.yaml`:
@@ -332,12 +309,11 @@ mcp:
 To point the strategy at a non-default model, set `inference.default_model`, or
 have your custom strategy pass a specific `model=` to `query_inference_gateway`.
 
-### 4.7 FreqAI and hybrid strategies
+### 4.6 FreqAI and hybrid strategies
 
 The config, image tag and CLI args already render:
 
 ```yaml
-strategy: {signal_source: freqai}
 freqai:
   enabled: true
   identifier: ft-freqai-v1        # bump whenever the feature set changes
@@ -350,8 +326,7 @@ freqai:
 missing in this repo:** the `FreqAiStrategy.py` / `HybridStrategy.py` files
 themselves (see the README Roadmap). Until you add them:
 
-- `signal_source: freqai|hybrid` passes config validation (when
-  `freqai.enabled: true`) but Freqtrade will fail to resolve the strategy name.
+- Freqtrade will fail to resolve the strategy name.
 - Add a FreqAI strategy file under `user_data/strategies/` (subclassing
   `IStrategy` and implementing `feature_engineering_*` / `populate_*` per the
   Freqtrade FreqAI docs), name it in `strategy.name`, and re-render.
@@ -440,7 +415,6 @@ when `MCP_ALLOW_WRITE=yes`. There is no tool that opens new positions.
 | Trades tagged `fallback_rsi` | Gateway unreachable — check `INFERENCE_URL`, `docker compose logs inference`, `curl 127.0.0.1:8000/healthz` |
 | Freqtrade exits: `invalid choice` / unknown strategy | `strategy.name` doesn't match a file in `user_data/strategies/`, or `FREQTRADE_ARGS` wasn't exported before restart |
 | Still running the old strategy after `render` | Compose interpolates `FREQTRADE_ARGS` from the shell — `set -a; source deploy/compose/.env.generated; set +a` then recreate |
-| `signal_source=freqai` rejected | Set `freqai.enabled: true` in `app.yaml` |
 | `/v1/predict` → 404 / 422 / 502 | 404 unknown model; 422 too few candles; 502 backend down / MCP breaker open |
 | `gpu: false` on `/healthz` despite a GPU | CPU image in use — use the `.gpu.yml` override and the CUDA image |
 

@@ -33,7 +33,6 @@ def render_compose(cfg: AppConfig, source: str = "config/app.yaml") -> str:
         f"FT_MAX_STAKE={cfg.exchange.max_stake}",
         f"FT_STRATEGY={_quote(cfg.strategy.name)}",
         f"FT_TIMEFRAME={_quote(cfg.strategy.timeframe)}",
-        f"FT_SIGNAL_SOURCE={cfg.strategy.signal_source}",
         f"FT_FREQAI_ENABLED={'true' if cfg.freqai.enabled else 'false'}",
         f"FT_FREQAIMODEL={_quote(cfg.freqai.model)}",
         f"FREQTRADE_TAG={freqtrade_tag(cfg)}",

@@ -6,7 +6,7 @@ without updating this file (see SPEC.md — Shared Contracts).
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class ExchangeConfig(BaseModel):
@@ -20,9 +20,8 @@ class ExchangeConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
-    """Signal strategy settings: source, name, timeframe, entry/exit thresholds."""
+    """Signal strategy settings: name, timeframe, entry/exit thresholds."""
 
-    signal_source: Literal["gateway", "freqai", "hybrid"] = "gateway"
     name: str = "AiSignalStrategy"
     timeframe: str = "5m"
     entry_signal_min: float = 0.4
@@ -110,16 +109,6 @@ class AppConfig(BaseModel):
     inference: InferenceConfig = Field(default_factory=InferenceConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
     secrets: SecretsConfig = Field(default_factory=SecretsConfig)
-
-    @model_validator(mode="after")
-    def _check_freqai_enabled(self) -> "AppConfig":
-        """Reject freqai/hybrid signal sources unless ``freqai.enabled`` is true."""
-        if self.strategy.signal_source in ("freqai", "hybrid") and not self.freqai.enabled:
-            raise ValueError(
-                f"strategy.signal_source={self.strategy.signal_source!r} "
-                "requires freqai.enabled=true"
-            )
-        return self
 
 
 class Candle(BaseModel):

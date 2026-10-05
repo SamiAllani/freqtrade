@@ -51,17 +51,6 @@ app.yaml+.env │  ftctl (config renderer)     │
 └──────────────┘
 ```
 
-### Signal sources (`strategy.signal_source`)
-
-| Value     | Strategy             | Gateway needed? | Status in this repo |
-|-----------|----------------------|-----------------|---------------------|
-| `gateway` | `AiSignalStrategy`   | Yes             | Implemented |
-| `freqai`  | `FreqAiStrategy`     | No (in-process) | Plumbing only (config renders, image tags, volumes); strategy file not yet added |
-| `hybrid`  | `HybridStrategy`     | Yes + FreqAI    | Same as above — planned, reuses `_inference_client.py` |
-
-`signal_source: freqai|hybrid` without `freqai.enabled: true` is rejected by
-`common/contracts.py` validation.
-
 ## Repo layout
 
 ```
@@ -75,7 +64,7 @@ app.yaml+.env │  ftctl (config renderer)     │
 ├── deploy/compose/    docker-compose.yml + .gpu.yml + .freqai-gpu.yml, prometheus/, grafana/, README.md
 ├── deploy/helm/       Chart.yaml, values.yaml, templates/ (freqtrade/inference/mcp-server, services, configmap, pvc, …)
 ├── dashboards/        trading.json, inference.json (canonical Grafana dashboards)
-├── scripts/           verify_dryrun.py — 20-check end-to-end dry-run verification
+├── scripts/           verify_dryrun.py — 18-check end-to-end dry-run verification
 └── tests/             unit, safety, gateway, MCP, observability, e2e/ (opt-in via FT_E2E_DOCKER=1)
 ```
 
@@ -101,8 +90,8 @@ python3 -m ftctl.cli render compose  --out deploy/compose/.env.generated
 
 # Lint + tests
 make lint
-make test                              # 142 passed, 2 skipped
-python3 scripts/verify_dryrun.py       # 20/20 checks (compose/helm steps SKIP without binaries)
+make test                              # 136 passed, 2 skipped
+python3 scripts/verify_dryrun.py       # 18/18 checks (compose/helm steps SKIP without binaries)
 
 # Boot the stack
 docker compose -f deploy/compose/docker-compose.yml up --build
@@ -153,7 +142,7 @@ python3 -m ftctl.cli show --format json
 Key `app.yaml` sections (see `config/app.yaml.example` for the full schema):
 
 - `mode: dry_run|live`, `exchange:` (name, pairs, stake_currency/amount, max_stake).
-- `strategy:` (`signal_source`, `name`, `timeframe`, `entry_signal_min`, `entry_confidence_min`, `exit_signal_max`).
+- `strategy:` (`name`, `timeframe`, `entry_signal_min`, `entry_confidence_min`, `exit_signal_max`).
 - `freqai:` (enabled, identifier, model → `--freqaimodel`, train/backtest/retrain windows, feature/data-split/training params).
 - `inference:` (url, default_model, per-model `{backend: local|mcp, device, server, tool}`).
 - `mcp.servers:` (`transport: stdio|http`, `command` or `url`).
@@ -192,7 +181,6 @@ come from there; `config/app.yaml.example` shows a working combination.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `signal_source` | `gateway` | `gateway` → `AiSignalStrategy` (needs inference gateway); `freqai` → `FreqAiStrategy` (in-process, needs `freqai.enabled: true`); `hybrid` → both (needs gateway + FreqAI). `freqai`/`hybrid` without `freqai.enabled: true` is a validation error. Rendered to Compose `FT_SIGNAL_SOURCE`, Helm `strategy.signalSource`. |
 | `name` | `AiSignalStrategy` | Freqtrade `--strategy` value, also `strategy` in `config.json`. |
 | `timeframe` | `5m` | Candle timeframe (`timeframe` in `config.json`, `FT_TIMEFRAME`). |
 | `entry_signal_min` | `0.4` | Enter when gateway `signal > entry_signal_min` **and** `confidence > entry_confidence_min`. Lands in `config.json` → `strategy_params`. |
@@ -460,6 +448,6 @@ for every secret field. `config/.env.example` contains placeholder values only.
 
 ## Roadmap
 
-- Add `FreqAiStrategy.py` / `HybridStrategy.py` (+ optional `freqaimodels/`, `freqtrade/Dockerfile.freqai` on a CUDA base, `docs/freqai.md`) per SPEC Task 11, so `signal_source` fully switches without code changes.
+- Add `FreqAiStrategy.py` / `HybridStrategy.py` (+ optional `freqaimodels/`, `freqtrade/Dockerfile.freqai` on a CUDA base, `docs/freqai.md`) per SPEC Task 11, selected via `strategy.name` without code changes.
 - CI workflow (lint → unit → `helm lint` → `compose config` → image builds → secret scan) and the small-dataset FreqAI backtest smoke test per SPEC Task 10.
 - Optional hardening: auth on the gateway, ingress/TLS for the Helm chart, alerting rules on exporter/gateway metrics.

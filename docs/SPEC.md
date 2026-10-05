@@ -18,7 +18,7 @@ A trading app built on Freqtrade that:
 
 - **Language:** Python 3.11 for all code.
 - **Trading engine:** the official Freqtrade Docker image, unmodified. Extras are added as strategy code and sidecar services. The base image is `freqtradeorg/freqtrade:stable`. When FreqAI is enabled, use a FreqAI variant instead (`stable_freqai`, or `stable_freqaitorch` for PyTorch models). Verify the exact tags in the Freqtrade docs when building.
-- **Two model paths, one switch:** `strategy.signal_source` selects `gateway` (Inference Gateway, Tasks 3, 5, 6), `freqai` (FreqAI, trained and run inside the Freqtrade process, Task 11) or `hybrid` (both must agree to enter).
+- **Two model paths:** the inference gateway (Tasks 3, 5, 6) and FreqAI (trained and run inside the Freqtrade process, Task 11). `strategy.name` picks the strategy class; a FreqAI strategy needs no gateway, and a hybrid strategy uses both.
 - **Safety default:** `dry_run: true` everywhere. Live trading requires an explicit flag in the central config **and** an environment guard (`FT_ALLOW_LIVE=yes`).
 - **MCP for external models:** the inference service contains an MCP client that calls model-providing MCP servers. An optional separate MCP server exposes the bot for inspection and control.
 - **UI:** no custom frontend. Use FreqUI (bundled with Freqtrade) and Grafana.
@@ -50,7 +50,7 @@ A trading app built on Freqtrade that:
 
 ### FreqAI path
 
-FreqAI is not a client of the gateway. It runs **inside** the Freqtrade process: it builds features from candles, trains a model (LightGBM, XGBoost, CatBoost or PyTorch), retrains it periodically on a sliding window in a background thread, and hands predictions to the strategy. Trained models live in `user_data/models/<identifier>` and must be on a persistent volume. With `signal_source: freqai` the gateway is not needed at all; with `hybrid` both are used.
+FreqAI is not a client of the gateway. It runs **inside** the Freqtrade process: it builds features from candles, trains a model (LightGBM, XGBoost, CatBoost or PyTorch), retrains it periodically on a sliding window in a background thread, and hands predictions to the strategy. Trained models live in `user_data/models/<identifier>` and must be on a persistent volume. A FreqAI strategy needs no gateway at all; a hybrid strategy uses both.
 
 ### Repo layout
 
@@ -80,7 +80,6 @@ exchange:
   stake_amount: 50
   max_stake: 100
 strategy:
-  signal_source: gateway   # gateway | freqai | hybrid
   name: AiSignalStrategy   # gateway -> AiSignalStrategy, freqai -> FreqAiStrategy, hybrid -> HybridStrategy
   timeframe: 5m
   entry_signal_min: 0.4
@@ -157,7 +156,7 @@ Create the monorepo skeleton, the shared pydantic schema for config and the infe
 
 ### Technical Spec
 - **Files:** `pyproject.toml` (uv or poetry workspace), `Makefile`, `.pre-commit-config.yaml` (ruff, mypy), `.gitignore` (excludes `.env`, `user_data/`, `*.generated.*`), `common/contracts.py`, `config/app.yaml.example`, `config/.env.example`, `README.md` stub.
-- **`contracts.py`:** pydantic v2 models `AppConfig`, `ExchangeConfig`, `StrategyConfig`, `ModelSpec`, `McpServerSpec`, `FreqAiConfig`, `PredictRequest`, `PredictResponse`, matching the shared contracts above exactly. Validation rule: `signal_source` of `freqai` or `hybrid` requires `freqai.enabled: true`.
+- **`contracts.py`:** pydantic v2 models `AppConfig`, `ExchangeConfig`, `StrategyConfig`, `ModelSpec`, `McpServerSpec`, `FreqAiConfig`, `PredictRequest`, `PredictResponse`, matching the shared contracts above exactly.
 - **Makefile targets:** `up`, `down`, `lint`, `test`, `render-config`.
 
 ### Acceptance Criteria
@@ -227,7 +226,7 @@ Provide a Freqtrade image and a strategy that consumes `/v1/predict`, with a pur
 - [ ] Thresholds are configurable without editing code
 
 ### Notes for the Agent
-Do not modify Freqtrade itself. Keep all logic in the strategy and client modules. This task covers `signal_source: gateway` only. FreqAI is Task 11, and its hybrid strategy reuses `_inference_client.py` from this task.
+Do not modify Freqtrade itself. Keep all logic in the strategy and client modules. This task covers the gateway strategy only. FreqAI is Task 11, and its hybrid strategy reuses `_inference_client.py` from this task.
 
 ---
 
@@ -415,7 +414,7 @@ Automated checks for correctness, packaging, and safety defaults.
 - **CI jobs:** lint (ruff, mypy), unit tests, `helm lint`, `docker compose config`, image builds, secret scan.
 - **Safety tests:** the rendered config from the example `app.yaml` always has `dry_run: true`; live mode without `FT_ALLOW_LIVE` fails; no secrets appear in rendered artifacts or logs.
 - **E2E:** compose up in dry-run with a fake model, wait for `/healthz`, assert the bot loop runs and the strategy received a signal.
-- **FreqAI:** a CI smoke test that runs `freqtrade backtesting` with `--freqaimodel LightGBMRegressor` on a small dataset (short `train_period_days`), and a check that `signal_source: freqai` without `freqai.enabled` is rejected.
+- **FreqAI:** a CI smoke test that runs `freqtrade backtesting` with `--freqaimodel LightGBMRegressor` on a small dataset (short `train_period_days`).
 
 ### Acceptance Criteria
 - [ ] CI is green on a fresh clone
@@ -432,7 +431,7 @@ Automated checks for correctness, packaging, and safety defaults.
 FreqAI is Freqtrade's built-in ML module. It engineers features from candles, trains a model, retrains it periodically on a live sliding window, and exposes predictions to the strategy. It runs inside the Freqtrade process, so it is an alternative to the Inference Gateway, not a client of it.
 
 ### Objective
-Add a FreqAI strategy and a hybrid strategy, plus the config plumbing so `strategy.signal_source` switches between `gateway`, `freqai` and `hybrid` without code changes.
+Add a FreqAI strategy and a hybrid strategy, plus the config plumbing so `strategy.name` (and `freqai.enabled`) selects between the gateway, FreqAI and hybrid strategies without code changes.
 
 ### Technical Spec
 - **Files:** `freqtrade/user_data/strategies/FreqAiStrategy.py`, `freqtrade/user_data/strategies/HybridStrategy.py`, `freqtrade/user_data/freqaimodels/` (optional custom model classes), `freqtrade/Dockerfile.freqai`, short `docs/freqai.md`.
@@ -444,7 +443,7 @@ Add a FreqAI strategy and a hybrid strategy, plus the config plumbing so `strate
 
 ### Acceptance Criteria
 - [ ] `freqtrade backtesting` with FreqAI runs on a small dataset and produces a trades result
-- [ ] `signal_source` switches between the strategies without editing code
+- [ ] `strategy.name` switches between the strategies without editing code
 - [ ] No entry is opened while `do_predict == 0` or before the first model is trained
 - [ ] Hybrid mode falls back to FreqAI-only when the gateway is unreachable
 - [ ] Trained models persist across a container restart

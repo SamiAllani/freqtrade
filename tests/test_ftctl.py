@@ -37,7 +37,6 @@ BASE_YAML: dict[str, Any] = {
         "max_stake": 100,
     },
     "strategy": {
-        "signal_source": "gateway",
         "name": "AiSignalStrategy",
         "timeframe": "5m",
         "entry_signal_min": 0.4,
@@ -275,7 +274,6 @@ def test_render_freqtrade_dry_run(tmp_path: Path, clean_env: None) -> None:
 def test_render_freqtrade_live_and_freqai(tmp_path: Path, clean_env: None) -> None:
     data = yaml.safe_load(yaml.safe_dump(BASE_YAML))
     data["mode"] = "live"
-    data["strategy"]["signal_source"] = "freqai"
     data["freqai"] = {
         "enabled": True,
         "identifier": "ft-freqai-v1",
@@ -312,7 +310,6 @@ def test_freqtrade_args_and_tags() -> None:
     freqai_cfg = AppConfig.model_validate(
         {
             **BASE_YAML,
-            "strategy": {**BASE_YAML["strategy"], "signal_source": "freqai"},
             "freqai": {"enabled": True, "model": "LightGBMRegressor"},
             "secrets": {},
         }
@@ -349,7 +346,6 @@ def test_render_compose_freqai_args() -> None:
     cfg = AppConfig.model_validate(
         {
             **BASE_YAML,
-            "strategy": {**BASE_YAML["strategy"], "signal_source": "freqai"},
             "freqai": {"enabled": True, "model": "LightGBMRegressor"},
             "secrets": {},
         }
@@ -380,7 +376,6 @@ def test_render_helm_freqai() -> None:
     cfg = AppConfig.model_validate(
         {
             **BASE_YAML,
-            "strategy": {**BASE_YAML["strategy"], "signal_source": "hybrid"},
             "freqai": {"enabled": True, "model": "LightGBMRegressor"},
             "secrets": {},
         }

@@ -234,7 +234,6 @@ def test_freqai_backtesting_smoke_config_shape() -> None:
     for var in ("BINANCE_API_KEY", "BINANCE_API_SECRET", "FT_API_USERNAME", "FT_API_PASSWORD"):
         os.environ.pop(var, None)
     data = yaml.safe_load(EXAMPLE_CONFIG.read_text())
-    data["strategy"]["signal_source"] = "freqai"
     data["freqai"].update(
         {
             "enabled": True,

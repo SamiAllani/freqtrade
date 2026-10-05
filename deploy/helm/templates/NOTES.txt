@@ -1,7 +1,7 @@
 Freqtrade AI stack deployed as {{ include "freqtrade-ai.fullname" . }}.
 
 Mode: {{ .Values.mode }} (dry_run={{ .Values.dryRun }})
-Strategy: {{ .Values.strategy.name }} (signalSource={{ .Values.strategy.signalSource }})
+Strategy: {{ .Values.strategy.name }}
 Freqtrade image tag: {{ include "freqtrade-ai.freqtradeTag" . }}{{ if .Values.freqai.enabled }} (FreqAI {{ .Values.freqai.identifier }}/{{ .Values.freqai.model }}){{ end }}
 
 1. Render runtime values with ftctl and upgrade:

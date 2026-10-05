@@ -71,8 +71,7 @@ def validate(
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
     typer.secho(
-        f"OK: {config_path} is valid "
-        f"(mode={cfg.mode}, signal_source={cfg.strategy.signal_source}).",
+        f"OK: {config_path} is valid (mode={cfg.mode}).",
         fg=typer.colors.GREEN,
     )
 

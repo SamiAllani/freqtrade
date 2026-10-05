@@ -28,7 +28,6 @@ def render_helm(cfg: AppConfig) -> dict[str, Any]:
         },
         "strategy": {
             "name": cfg.strategy.name,
-            "signalSource": cfg.strategy.signal_source,
             "timeframe": cfg.strategy.timeframe,
             "entrySignalMin": cfg.strategy.entry_signal_min,
             "entryConfidenceMin": cfg.strategy.entry_confidence_min,

@@ -33,7 +33,6 @@ sys.path.insert(0, str(REPO))
 import yaml  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from common.contracts import AppConfig  # noqa: E402
 from ftctl.guards import GuardError, check_guards  # noqa: E402
 from ftctl.loader import load_config  # noqa: E402
 from ftctl.render.compose import render_compose  # noqa: E402
@@ -87,20 +86,6 @@ def main() -> int:
         ok &= check("live without FT_ALLOW_LIVE is refused", False, "guards did not raise")
     except GuardError:
         ok &= check("live without FT_ALLOW_LIVE is refused", True)
-
-    # signal_source freqai/hybrid without enabled must be rejected.
-    for source in ("freqai", "hybrid"):
-        try:
-            AppConfig.model_validate(
-                {
-                    **cfg.model_dump(),
-                    "strategy": {**cfg.model_dump()["strategy"], "signal_source": source},
-                    "freqai": {**cfg.model_dump()["freqai"], "enabled": False},
-                }
-            )
-            ok &= check(f"signal_source={source} without freqai.enabled rejected", False)
-        except Exception:  # noqa: BLE001 - any validation error is the expected outcome
-            ok &= check(f"signal_source={source} without freqai.enabled rejected", True)
 
     # 2. Rendered targets are dry-run.
     with tempfile.TemporaryDirectory() as tmp:
